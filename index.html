@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anti Corruption Portal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+
+  <div class="brand" onclick="showPage('home')">
+    <div class="brand-mark">🛡️</div>
+
+    <div>
+      <strong>ANTI CORRUPTION</strong>
+      <small>Speak Up · Report · Make a Change</small>
+    </div>
+  </div>
+
+  <div class="top-actions">
+    <button class="link-btn" onclick="showPage('take-action')">
+      ⚖ Take Action
+    </button>
+
+    <button class="link-btn" onclick="showPage('handler-login')">
+      🔒 Service Handler Login
+    </button>
+
+    <button class="icon-btn" onclick="showPage('home')">
+      ⌂
+    </button>
+  </div>
+
+</header>
+
+
+<main>
+
+<!-- ================= HOME ================= -->
+
+<section id="home" class="page active">
+
+  <div class="hero">
+
+    <div class="hero-copy">
+
+      <p class="eyebrow">
+        TRANSPARENCY BUILDS TRUST
+      </p>
+
+      <h1>
+        Together Against <span>Corruption</span>
+      </h1>
+
+      <p>
+        Report corruption safely. Track your complaint with a unique
+        Query ID and mobile number. Receive a response from the
+        responsible service officer.
+      </p>
+
+      <div class="hero-buttons">
+
+        <button class="primary"
+                onclick="showPage('consumer')">
+          File a Complaint
+        </button>
+
+        <button class="secondary"
+                onclick="showPage('track')">
+          Track Complaint
+        </button>
+
+        <button class="secondary"
+                onclick="showPage('take-action')">
+          Take Action
+        </button>
+
+      </div>
+
+      <div class="hero-points">
+        <span>✓ Secure reporting</span>
+        <span>✓ Query ID tracking</span>
+        <span>✓ Officer response</span>
+      </div>
+
+    </div>
+
+
+    <div class="hero-art">
+
+      <div class="shield">
+        🛡️
+      </div>
+
+      <div class="art-text">
+        SPEAK UP
+        <br>
+        <span>MAKE A CHANGE</span>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="feature-grid">
+
+    <article>
+
+      <div class="feature-icon">📋</div>
+
+      <h3>
+        Track Complaints
+      </h3>
+
+      <p>
+        Use your mobile number or Query ID to see
+        the latest status.
+      </p>
+
+    </article>
+
+
+    <article class="clickable"
+             onclick="showPage('take-action')">
+
+      <div class="feature-icon">⚖</div>
+
+      <h3>
+        Take Action
+      </h3>
+
+      <p>
+        Learn the basic reporting and follow-up
+        process in simple language.
+      </p>
+
+    </article>
+
+
+    <article>
+
+      <div class="feature-icon">🛡</div>
+
+      <h3>
+        Stop Corruption
+      </h3>
+
+      <p>
+        Keep a transparent record of every complaint
+        and response.
+      </p>
+
+    </article>
+
+
+    <article>
+
+      <div class="feature-icon">🤝</div>
+
+      <h3>
+        Build a Better Tomorrow
+      </h3>
+
+      <p>
+        Use the portal to submit information and
+        follow the complaint process.
+      </p>
+
+    </article>
+
+  </div>
+
+
+  <div class="home-panels">
+
+    <div class="panel">
+
+      <h2>
+        Track Your Complaint
+      </h2>
+
+      <p>
+        Enter the mobile number used while filing
+        your complaint.
+      </p>
+
+      <div class="inline-form">
+
+        <input
+          id="homeTrackMobile"
+          placeholder="10-digit mobile number"
+          maxlength="10"
+          inputmode="numeric"
+        >
+
+        <button
+          class="primary"
+          onclick="trackFromHome()">
+          Check Status
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div class="panel">
+
+      <h2>
+        Consumer Portal
+      </h2>
+
+      <p>
+        File a new complaint, add your mobile number,
+        and receive a unique Query ID.
+      </p>
+
+      <button
+        class="primary"
+        onclick="showPage('consumer')">
+
+        Open Consumer Complaint Page
+
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<!-- ================= CONSUMER ================= -->
+
+<section id="consumer" class="page">
+
+  <div class="section-heading">
+
+    <div>
+
+      <p class="eyebrow">
+        CONSUMER PORTAL
+      </p>
+
+      <h1>
+        File a Complaint
+      </h1>
+
+      <p>
+        Your voice matters. Report corruption and
+        we will route it to a service handler.
+      </p>
+
+    </div>
+
+    <button
+      class="secondary"
+      onclick="showPage('home')">
+
+      ← Home
+
+    </button>
+
+  </div>
+
+
+  <form id="complaintForm"
+        class="form-card">
+
+    <div class="form-grid">
+
+
+      <label>
+
+        Mobile Number <span>*</span>
+
+        <input
+          id="mobile"
+          required
+          pattern="[0-9]{10}"
+          maxlength="10"
+          inputmode="numeric"
+          placeholder="Enter 10-digit mobile number"
+        >
+
+      </label>
+
+
+      <label>
+
+        Full Name
+
+        <input
+          id="name"
+          placeholder="Enter your name"
+        >
+
+      </label>
+
+
+      <label>
+
+        Location / Area
+
+        <input
+          id="location"
+          placeholder="City, area or office"
+        >
+
+      </label>
+
+
+      <label>
+
+        Issue Type <span>*</span>
+
+        <select id="issue" required>
+
+          <option value="">
+            Select issue type
+          </option>
+
+          <option>
+            Bribe Demand
+          </option>
+
+          <option>
+            Illegal Construction
+          </option>
+
+          <option>
+            Ration Scam
+          </option>
+
+          <option>
+            Public Service Delay
+          </option>
+
+          <option>
+            Land Fraud
+          </option>
+
+          <option>
+            Other
+          </option>
+
+        </select>
+
+      </label>
+
+
+      <label class="full">
+
+        Complaint Details <span>*</span>
+
+        <textarea
+          id="details"
+          required
+          maxlength="1000"
+          placeholder="Describe the issue clearly..."
+        ></textarea>
+
+        <small id="charCount">
+          0/1000
+        </small>
+
+      </label>
+
+
+      <label>
+
+        Attach Image
+
+        <input
+          id="image"
+          type="file"
+          accept="image/*"
+        >
+
+      </label>
+
+
+      <label>
+
+        Attach Document
+
+        <input
+          id="document"
+          type="file"
+          accept=".pdf,.doc,.docx,.jpg,.png"
+        >
+
+      </label>
+
+    </div>
+
+
+    <div class="notice">
+
+      🔐 Your mobile number is required so the portal
+      can associate status updates and the officer
+      response with your complaint.
+
+      <br><br>
+
+      This front-end demo shows an SMS notification
+      preview. Real SMS requires a secure server
+      and SMS provider.
+
+    </div>
+
+
+    <button
+      class="primary wide"
+      type="submit">
+
+      Submit Complaint & Generate Query ID
+
+    </button>
+
+  </form>
+
+</section>
+
+
+<!-- ================= SUBMITTED ================= -->
+
+<section id="submitted" class="page">
+
+  <div class="success-card">
+
+    <div class="success-icon">
+      ✓
+    </div>
+
+    <h1>
+      Complaint Submitted!
+    </h1>
+
+    <p>
+      Your complaint has been successfully submitted
+      and forwarded to a service handler.
+    </p>
+
+
+    <div class="notice">
+
+      📱 The service officer will review your case
+      and provide a solution.
+
+      The response will appear in your complaint
+      status and notification preview.
+
+    </div>
+
+
+    <div id="submittedId"
+         class="complaint-id">
+    </div>
+
+
+    <p class="muted">
+
+      Keep your Query ID and mobile number safe
+      for tracking.
+
+    </p>
+
+
+    <button
+      class="primary"
+      onclick="showPage('home')">
+
+      Back to Home
+
+    </button>
+
+
+    <button
+      class="secondary"
+      onclick="showPage('track')">
+
+      Track This Complaint
+
+    </button>
+
+  </div>
+
+</section>
+
+
+<!-- ================= TRACK ================= -->
+
+<section id="track" class="page">
+
+  <div class="section-heading">
+
+    <div>
+
+      <p class="eyebrow">
+        CONSUMER PORTAL
+      </p>
+
+      <h1>
+        Track Your Complaint
+      </h1>
+
+      <p>
+        Use your mobile number and optionally a Query ID.
+      </p>
+
+    </div>
+
+
+    <button
+      class="secondary"
+      onclick="showPage('home')">
+
+      ← Home
+
+    </button>
+
+  </div>
+
+
+  <div class="panel">
+
+    <div class="inline-form">
+
+      <input
+        id="trackMobile"
+        maxlength="10"
+        inputmode="numeric"
+        placeholder="10-digit mobile number"
+      >
+
+      <input
+        id="trackQueryId"
+        placeholder="Query ID e.g. AC-2026-123456"
+      >
+
+      <button
+        class="primary"
+        onclick="trackComplaint()">
+
+        Check Status
+
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <div id="trackResult"></div>
+
+</section>
+
+
+<!-- ================= HANDLER LOGIN ================= -->
+
+<section id="handler-login" class="page">
+
+  <div class="login-wrap">
+
+
+    <div class="login-art">
+
+      <div class="shield large">
+        🛡
+      </div>
+
+      <h2>
+        Service Handler Portal
+      </h2>
+
+      <p>
+        Restricted portal for authorised service
+        handlers. Consumers should use the
+        Consumer Portal.
+      </p>
+
+    </div>
+
+
+    <form
+      id="loginForm"
+      class="form-card login-card">
+
+      <h1>
+        Service Handler Login
+      </h1>
+
+      <p class="muted">
+        Authorised personnel only.
+      </p>
+
+
+      <label>
+
+        Username / Email
+
+        <input
+          id="username"
+          required
+          autocomplete="username"
+          placeholder="Enter handler username"
+        >
+
+      </label>
+
+
+      <label>
+
+        Password
+
+        <input
+          id="password"
+          type="password"
+          required
+          autocomplete="current-password"
+          placeholder="Enter password"
+        >
+
+      </label>
+
+
+      <!-- CAPTCHA -->
+
+      <div class="captcha-box">
+
+        <div>
+
+          <b>
+            Security Verification
+          </b>
+
+          <span id="captchaQuestion">
+          </span>
+
+        </div>
+
+
+        <button
+          type="button"
+          class="secondary captcha-refresh"
+          onclick="generateCaptcha()">
+
+          ↻
+
+        </button>
+
+      </div>
+
+
+      <input
+        id="captchaAnswer"
+        required
+        inputmode="numeric"
+        placeholder="Enter CAPTCHA answer"
+      >
+
+
+      <button
+        class="primary wide"
+        type="submit">
+
+        Login
+
+      </button>
+
+
+      <button
+        type="button"
+        class="secondary wide"
+        onclick="showPage('home')">
+
+        Back to Home
+
+      </button>
+
+    </form>
+
+  </div>
+
+</section>
+
+
+<!-- ================= DASHBOARD ================= -->
+
+<section id="dashboard" class="page">
+
+  <div class="dashboard-head">
+
+    <div>
+
+      <p class="eyebrow">
+        SERVICE HANDLER
+      </p>
+
+      <h1>
+        Service Handler Dashboard
+      </h1>
+
+      <p>
+        Welcome back, Service Handler
+      </p>
+
+    </div>
+
+
+    <div>
+
+      <button
+        class="secondary"
+        onclick="showPage('profile')">
+
+        Profile
+
+      </button>
+
+
+      <button
+        class="secondary"
+        onclick="logout()">
+
+        Logout
+
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <div class="stats">
+
+    <div>
+      <b id="totalStat">0</b>
+      <span>Total Assigned</span>
+    </div>
+
+    <div>
+      <b id="validStat">0</b>
+      <span>Valid Complaints</span>
+    </div>
+
+    <div>
+      <b id="pendingStat">0</b>
+      <span>Pending</span>
+    </div>
+
+    <div>
+      <b id="resolvedStat">0</b>
+      <span>Resolved</span>
+    </div>
+
+  </div>
+
+
+  <div class="dashboard-grid">
+
+    <div class="panel">
+
+      <h2>
+        Recent Complaints
+      </h2>
+
+      <div class="table-wrap">
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>ID</th>
+              <th>Complainant</th>
+              <th>Issue</th>
+              <th>Status</th>
+              <th>Action</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody id="complaintsTable">
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <div class="panel">
+
+      <h2>
+        Quick Actions
+      </h2>
+
+
+      <button
+        class="secondary wide"
+        onclick="filterComplaints('Valid')">
+
+        View Valid Complaints
+
+      </button>
+
+
+      <button
+        class="secondary wide"
+        onclick="showPage('give-solution')">
+
+        💡 Give Solution
+
+      </button>
+
+
+      <button
+        class="secondary wide"
+        onclick="showToast('Escalation recorded for review.')">
+
+        ↑ Escalate to Head
+
+      </button>
+
+
+      <button
+        class="secondary wide"
+        onclick="showPage('take-action')">
+
+        ⚖ Take Action / Knowledge
+
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+
+<!-- ================= SOLUTION ================= -->
+
+<section id="give-solution" class="page">
+
+  <div class="section-heading">
+
+    <div>
+
+      <p class="eyebrow">
+        SERVICE HANDLER
+      </p>
+
+      <h1>
+        Give Solution
+      </h1>
+
+      <p>
+        Select a complaint and send a response
+        to the consumer.
+      </p>
+
+    </div>
+
+
+    <button
+      class="secondary"
+      onclick="showPage('dashboard')">
+
+      ← Dashboard
+
+    </button>
+
+  </div>
+
+
+  <div class="form-card">
+
+    <label>
+
+      Complaint
+
+      <select id="solutionComplaint">
+      </select>
+
+    </label>
+
+
+    <br>
+
+
+    <label>
+
+      Officer Response
+
+      <textarea
+        id="solutionText"
+        placeholder="Write the action taken or solution..."
+      ></textarea>
+
+    </label>
+
+
+    <br>
+
+
+    <label>
+
+      Change Status
+
+      <select id="solutionStatus">
+
+        <option>
+          Resolved
+        </option>
+
+        <option>
+          Under Review
+        </option>
+
+        <option>
+          Rejected
+        </option>
+
+      </select>
+
+    </label>
+
+
+    <button
+      class="primary wide"
+      onclick="sendSolution()">
+
+      Send Solution to Consumer
+
+    </button>
+
+  </div>
+
+</section>
+
+
+<!-- ================= TAKE ACTION ================= -->
+
+<section id="take-action" class="page">
+
+  <div class="section-heading">
+
+    <div>
+
+      <p class="eyebrow">
+        KNOWLEDGE & ACTION
+      </p>
+
+      <h1 id="actionTitle">
+        Take Action
+      </h1>
+
+      <p id="actionIntro">
+        General guidance for reporting suspected
+        corruption and following a complaint.
+      </p>
+
+    </div>
+
+
+    <button
+      class="secondary"
+      onclick="showPage('home')">
+
+      ← Home
+
+    </button>
+
+  </div>
+
+
+  <div class="language-bar">
+
+    <b>
+      Language:
+    </b>
+
+    <button
+      class="secondary"
+      onclick="setLanguage('en')">
+
+      English
+
+    </button>
+
+    <button
+      class="secondary"
+      onclick="setLanguage('hi')">
+
+      हिन्दी
+
+    </button>
+
+    <button
+      class="secondary"
+      onclick="setLanguage('bn')">
+
+      বাংলা
+
+    </button>
+
+  </div>
+
+
+  <div id="actionCards"
+       class="action-grid">
+  </div>
+
+
+  <div class="notice"
+       id="actionNotice">
+  </div>
+
+</section>
+
+
+<!-- ================= PROFILE ================= -->
+
+<section id="profile" class="page">
+
+  <div class="section-heading">
+
+    <div>
+
+      <p class="eyebrow">
+        SERVICE HANDLER
+      </p>
+
+      <h1>
+        My Profile
+      </h1>
+
+    </div>
+
+
+    <button
+      class="secondary"
+      onclick="showPage('dashboard')">
+
+      ← Dashboard
+
+    </button>
+
+  </div>
+
+
+  <div class="profile-card">
+
+    <div class="avatar">
+      SH
+    </div>
+
+    <div>
+
+      <h2>
+        Service Handler
+      </h2>
+
+      <p>
+        Senior Service Officer
+      </p>
+
+      <p>
+        Employee ID: SH-1024
+      </p>
+
+      <p>
+        Department: Public Grievance Cell
+      </p>
+
+    </div>
+
+  </div>
+
+</section>
+
+</main>
+
+
+<footer>
+
+  © 2026 Anti Corruption Portal · Demo application
+
+</footer>
+
+
+<div id="toast"
+     class="toast">
+</div>
+
+
+<script src="script.js"></script>
+
+</body>
+</html>
