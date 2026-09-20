@@ -663,10 +663,10 @@ $("loginForm").addEventListener(
       DEMO LOGIN
 
       Username:
-      officer
+      ___________
 
       Password:
-      1234
+      ________
 
       IMPORTANT:
       For a real website these credentials
