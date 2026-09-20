@@ -676,9 +676,9 @@ $("loginForm").addEventListener(
 
     if (
 
-      username === "officer" &&
+      username === "Empo@Log$45" &&
 
-      password === "1234" &&
+      password === "PC2$7908" &&
 
       answer === captchaAnswer
 
