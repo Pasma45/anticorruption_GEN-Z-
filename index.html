@@ -184,15 +184,14 @@
       </h2>
 
       <p>
-        Enter the mobile number used while filing
-        your complaint.
+        Sign in with the account used to submit your complaint.
       </p>
 
       <div class="inline-form">
 
         <input
           id="homeTrackMobile"
-          placeholder="10-digit mobile number"
+          placeholder="Optional: 10-digit contact number"
           maxlength="10"
           inputmode="numeric"
         >
@@ -267,6 +266,39 @@
 
   </div>
 
+  <div class="panel consumer-auth-panel">
+    <p id="consumerAuthStatus" class="muted">
+      Sign in with Google or Apple to submit and track your complaints.
+    </p>
+    <div id="consumerAuthButtons" class="consumer-auth-buttons">
+      <button
+        type="button"
+        class="secondary wide provider-button"
+        onclick="consumerProviderSignIn('google')">
+        <span class="provider-mark provider-mark-google" aria-hidden="true">G</span>
+        Continue with Google
+      </button>
+      <button
+        type="button"
+        class="secondary wide provider-button"
+        onclick="consumerProviderSignIn('apple')">
+        <svg class="provider-mark provider-mark-apple" viewBox="0 0 384 512" aria-hidden="true">
+          <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.9-18.8-26.8-47.3-41.6-85.3-44.5-36-2.8-75.4 21-90.1 21-15.5 0-50.3-20-77.8-20C58.9 140.3 0 183.8 0 276.9c0 27.5 5 55.9 15 85.2 13.4 36.7 61.6 126.5 112 125 26.4-.6 45.1-18.7 78.3-18.7 32.2 0 49.6 18.7 79.1 18.7 50.8-.7 94.4-82.3 107.1-119.1-68-32-72.8-94.6-72.8-99.3zM261.5 104.5C289.2 71.6 286.7 41.6 285.9 31c-24.5 1.4-52.8 16.7-68.9 35.2-17.8 19.8-28.3 44.3-26.1 71.2 26.5 2 50.7-11.6 70.6-32.9z"/>
+        </svg>
+        Continue with Apple
+      </button>
+    </div>
+    <button
+      id="consumerSignOut"
+      type="button"
+      class="secondary wide"
+      onclick="logout()"
+      style="display:none">
+      Sign out
+    </button>
+    <small>Use the same account later to view your complaint status.</small>
+  </div>
+
 
   <form id="complaintForm"
         class="form-card">
@@ -286,13 +318,7 @@
           inputmode="numeric"
           placeholder="Enter 10-digit mobile number"
         >
-
-        <button
-          type="button"
-          class="secondary"
-          onclick="consumerSendOtp()">
-          Send Verification OTP
-        </button>
+        <small>This is a contact number and is not verified by SMS.</small>
 
       </label>
 
@@ -405,26 +431,10 @@
 
     </div>
 
-    <div id="consumerOtpBox" class="otp-box">
-      <input
-        id="consumerOtp"
-        maxlength="6"
-        inputmode="numeric"
-        autocomplete="one-time-code"
-        placeholder="Enter the 6-digit OTP">
-      <button
-        type="button"
-        class="primary"
-        onclick="verifyConsumerOtp()">
-        Verify Mobile
-      </button>
-    </div>
-
-
     <div class="notice">
 
-      🔐 Verify your mobile number before submitting so only you can
-      access your complaint history and evidence.
+      🔐 Sign in with Google or Apple to submit and privately access
+      your complaint history and evidence.
 
       <br><br>
 
@@ -434,8 +444,10 @@
 
 
     <button
+      id="submitComplaintBtn"
       class="primary wide"
-      type="submit">
+      type="submit"
+      disabled>
 
       Submit Complaint & Generate Query ID
 
@@ -484,8 +496,8 @@
 
     <p class="muted">
 
-      Keep your Query ID and mobile number safe
-      for tracking.
+      Keep your Query ID and sign in with the same Google or Apple
+      account to track this complaint.
 
     </p>
 
@@ -529,8 +541,8 @@
       </h1>
 
       <p>
-        Enter your mobile number to verify with an OTP. Add your Query ID
-        to check one specific complaint.
+        Sign in with the Google or Apple account used to submit your complaint.
+        You can filter by contact number or enter a Query ID.
       </p>
 
     </div>
@@ -547,6 +559,38 @@
   </div>
 
 
+  <div class="panel consumer-auth-panel">
+    <p id="trackAuthStatus" class="muted">
+      Sign in with the account used to submit your complaint.
+    </p>
+    <div id="trackAuthButtons" class="consumer-auth-buttons">
+      <button
+        type="button"
+        class="secondary wide provider-button"
+        onclick="consumerProviderSignIn('google')">
+        <span class="provider-mark provider-mark-google" aria-hidden="true">G</span>
+        Continue with Google
+      </button>
+      <button
+        type="button"
+        class="secondary wide provider-button"
+        onclick="consumerProviderSignIn('apple')">
+        <svg class="provider-mark provider-mark-apple" viewBox="0 0 384 512" aria-hidden="true">
+          <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.9-18.8-26.8-47.3-41.6-85.3-44.5-36-2.8-75.4 21-90.1 21-15.5 0-50.3-20-77.8-20C58.9 140.3 0 183.8 0 276.9c0 27.5 5 55.9 15 85.2 13.4 36.7 61.6 126.5 112 125 26.4-.6 45.1-18.7 78.3-18.7 32.2 0 49.6 18.7 79.1 18.7 50.8-.7 94.4-82.3 107.1-119.1-68-32-72.8-94.6-72.8-99.3zM261.5 104.5C289.2 71.6 286.7 41.6 285.9 31c-24.5 1.4-52.8 16.7-68.9 35.2-17.8 19.8-28.3 44.3-26.1 71.2 26.5 2 50.7-11.6 70.6-32.9z"/>
+        </svg>
+        Continue with Apple
+      </button>
+    </div>
+    <button
+      id="trackSignOut"
+      type="button"
+      class="secondary wide"
+      onclick="logout()"
+      style="display:none">
+      Sign out
+    </button>
+  </div>
+
   <div class="panel">
 
     <div class="inline-form">
@@ -555,19 +599,19 @@
         id="trackMobile"
         maxlength="10"
         inputmode="numeric"
-        placeholder="10-digit mobile number"
+        placeholder="Optional: contact number filter"
       >
 
       <input
         id="trackQueryId"
-        placeholder="Query ID e.g. AC-2026-123456789"
+        placeholder="Optional: Query ID"
       >
 
       <button
         class="primary"
         onclick="trackComplaint()">
 
-        Check Status
+        Find Complaints
 
       </button>
 
@@ -575,13 +619,6 @@
 
   </div>
 
-
-  <div id="trackOtpBox" class="panel inline-form otp-box">
-    <input id="trackOtp" maxlength="6" inputmode="numeric"
-           autocomplete="one-time-code"
-           placeholder="Enter the OTP sent to your mobile">
-    <button class="primary" onclick="verifyTrackOtp()">Verify OTP</button>
-  </div>
 
   <div id="trackResult"></div>
 
@@ -624,60 +661,26 @@
 
       <p class="muted">
         Authorised personnel only. Sign in with an approved Google or Apple
-        account, or verify your registered mobile number with an OTP.
+        account.
       </p>
 
       <button
         type="button"
-        class="secondary wide"
+        class="secondary wide provider-button"
         onclick="handlerProviderSignIn('google')">
+        <span class="provider-mark provider-mark-google" aria-hidden="true">G</span>
         Continue with Google
       </button>
 
       <button
         type="button"
-        class="secondary wide"
+        class="secondary wide provider-button"
         onclick="handlerProviderSignIn('apple')">
+        <svg class="provider-mark provider-mark-apple" viewBox="0 0 384 512" aria-hidden="true">
+          <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.9-18.8-26.8-47.3-41.6-85.3-44.5-36-2.8-75.4 21-90.1 21-15.5 0-50.3-20-77.8-20C58.9 140.3 0 183.8 0 276.9c0 27.5 5 55.9 15 85.2 13.4 36.7 61.6 126.5 112 125 26.4-.6 45.1-18.7 78.3-18.7 32.2 0 49.6 18.7 79.1 18.7 50.8-.7 94.4-82.3 107.1-119.1-68-32-72.8-94.6-72.8-99.3zM261.5 104.5C289.2 71.6 286.7 41.6 285.9 31c-24.5 1.4-52.8 16.7-68.9 35.2-17.8 19.8-28.3 44.3-26.1 71.2 26.5 2 50.7-11.6 70.6-32.9z"/>
+        </svg>
         Continue with Apple
       </button>
-
-      <div class="login-divider"><span>OR USE MOBILE OTP</span></div>
-
-      <label>
-        Mobile Number
-        <input
-          id="handlerMobile"
-          type="tel"
-          maxlength="10"
-          inputmode="numeric"
-          autocomplete="tel-national"
-          placeholder="10-digit registered mobile number"
-        >
-      </label>
-
-      <button
-        id="sendOtpBtn"
-        type="button"
-        class="secondary wide"
-        onclick="handlerSendOtp()">
-        Send OTP
-      </button>
-
-      <div id="otpBox" class="otp-box">
-
-        <input
-          id="handlerOtp"
-          maxlength="6"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          placeholder="Enter 6-digit OTP"
-        >
-
-        <button class="primary" type="submit">
-          Verify &amp; Login
-        </button>
-
-      </div>
 
       <button
         type="button"
@@ -1110,8 +1113,6 @@
      class="toast">
 </div>
 
-
-<div id="recaptcha-container"></div>
 
 <script src="script.js"></script>
 <script type="module" src="firebase.js"></script>

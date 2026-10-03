@@ -5,33 +5,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function authMobile() {
+    function consumer() {
       return signedIn()
-        && request.auth.token.phone_number is string
-        && request.auth.token.phone_number.matches('^\\+91[0-9]{10}$')
-        ? request.auth.token.phone_number.split('\\+91')[1]
-        : '';
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
+        && request.auth.token.email is string;
     }
 
     function handler() {
-      return (
-          authMobile() != ''
-          && exists(/databases/$(database)/documents/handlers/$(authMobile()))
-          && get(/databases/$(database)/documents/handlers/$(authMobile())).data.active == true
-        )
-        || (
-          signedIn()
-          && request.auth.token.email_verified == true
-          && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
-          && request.auth.token.email is string
-          && exists(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email))
-          && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email
-        );
+      return consumer()
+        && exists(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email;
     }
 
     match /handlers/{mobile} {
-      allow get: if signedIn() && mobile == authMobile();
-      allow list, create, update, delete: if false;
+      allow read, write: if false;
     }
 
     match /handlerAccounts/{email} {
@@ -62,9 +50,10 @@ service cloud.firestore {
     }
 
     match /complaints/{complaintId} {
-      allow create: if signedIn()
+      allow create: if consumer()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.mobile == authMobile()
+        && request.resource.data.mobile is string
+        && request.resource.data.mobile.matches('^[0-9]{10}$')
         && request.resource.data.id == complaintId
         && request.resource.data.status == 'Pending'
         && request.resource.data.response == ''
@@ -74,13 +63,34 @@ service cloud.firestore {
           'documentUrl', 'documentPath', 'documentName', 'created',
           'updated', 'createdAt'
         ])
+        && request.resource.data.keys().hasAll([
+          'id', 'mobile', 'name', 'location', 'issue', 'details',
+          'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
+          'documentUrl', 'documentPath', 'documentName', 'created',
+          'updated', 'createdAt'
+        ])
         && request.resource.data.createdAt == request.time
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.location is string
+        && request.resource.data.location.size() <= 300
+        && request.resource.data.issue is string
+        && request.resource.data.issue.size() <= 100
         && request.resource.data.details is string
         && request.resource.data.details.size() > 0
-        && request.resource.data.details.size() <= 1000;
+        && request.resource.data.details.size() <= 1000
+        && request.resource.data.response is string
+        && request.resource.data.response == ''
+        && request.resource.data.imageUrl is string
+        && request.resource.data.imagePath is string
+        && request.resource.data.documentUrl is string
+        && request.resource.data.documentPath is string
+        && request.resource.data.documentName is string
+        && request.resource.data.created is string
+        && request.resource.data.updated is string;
 
       allow get, list: if handler()
-        || (signedIn() && resource.data.ownerUid == request.auth.uid);
+        || (consumer() && resource.data.ownerUid == request.auth.uid);
 
       allow update: if handler()
         && request.resource.data.diff(resource.data).affectedKeys()

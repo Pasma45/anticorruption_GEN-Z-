@@ -527,6 +527,48 @@ body {
   margin-top: 0;
 }
 
+.provider-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.provider-mark {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.provider-mark-google {
+  color: #4285f4;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.provider-mark-apple {
+  fill: currentColor;
+}
+
+.consumer-auth-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.consumer-auth-panel p,
+.consumer-auth-panel small {
+  margin: 0;
+}
+
+.consumer-auth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .login-divider {
   display: flex;
   align-items: center;

@@ -16,8 +16,6 @@ let stopListening = null;
 
 let knownIds = null;            // used to announce NEW complaints
 
-let verifiedConsumerMobile = "";
-
 
 const PROTECTED_PAGES = [
   "dashboard",
@@ -109,53 +107,6 @@ function showToast(message) {
 }
 
 
-function otpFailureMessage(error) {
-
-  const code = error && typeof error.code === "string"
-    ? error.code
-    : "";
-  const detail = error && typeof error.message === "string"
-    ? error.message.replace(/\s+/g, " ").slice(0, 180)
-    : "";
-
-  switch (code) {
-
-    case "auth/unauthorized-domain":
-      return "Firebase rejected this website domain. Add pasma45.github.io under Authentication > Settings > Authorised domains.";
-
-    case "auth/quota-exceeded":
-      return "Firebase's free OTP SMS limit may be reached (10 per day). Try again tomorrow or link billing to increase the limit.";
-
-    case "auth/too-many-requests":
-      return "Too many OTP attempts. Wait before trying again, or use Firebase test phone numbers during development.";
-
-    case "auth/billing-not-enabled":
-      return "Firebase requires a billing account to send more OTP messages. Check the project's SMS quota in Firebase Authentication.";
-
-    case "auth/captcha-check-failed":
-    case "auth/missing-app-credential":
-    case "auth/invalid-app-credential":
-      return "Firebase could not verify this browser. Reload the page and try again; check that pasma45.github.io is an authorised domain.";
-
-    case "auth/operation-not-allowed":
-      return "Phone OTP sign-in is disabled in Firebase Authentication.";
-
-    case "auth/invalid-phone-number":
-      return "Firebase rejected this phone number. Enter a valid Indian 10-digit mobile number.";
-
-    case "auth/network-request-failed":
-      return "The OTP request could not reach Firebase. Check your internet connection and try again.";
-
-    default:
-      return code
-        ? `OTP request failed (${code})${detail ? `: ${detail}` : "."}`
-        : `OTP request failed${detail ? `: ${detail}` : ". Check your connection and contact the site administrator if it continues."}`;
-
-  }
-
-}
-
-
 window.handlerProviderSignIn = async function handlerProviderSignIn(provider) {
 
   if (!window.fb) {
@@ -192,6 +143,82 @@ window.handlerProviderSignIn = async function handlerProviderSignIn(provider) {
 }
 
 
+async function consumerProviderSignIn(provider) {
+
+  if (!window.fb) {
+
+    showToast("Still connecting. Try again in a moment.");
+
+    return;
+
+  }
+
+  try {
+
+    const user = await fb.signInConsumer(provider);
+
+    updateConsumerAuthUI(user);
+
+    showToast("Signed in as " + (user.displayName || user.email) + ".");
+
+  } catch (error) {
+
+    console.error(error);
+
+    if (error && error.code === "auth/operation-not-allowed") {
+      showToast("This sign-in provider is not enabled in Firebase Authentication yet.");
+    } else if (error && error.code === "auth/popup-closed-by-user") {
+      showToast("Sign-in was cancelled.");
+    } else {
+      showToast(error && error.message
+        ? error.message
+        : "Could not sign in. Please try again.");
+    }
+
+  }
+
+}
+
+
+function updateConsumerAuthUI(user) {
+
+  const signedIn = Boolean(user && window.fb && fb.isConsumer());
+
+  for (const id of ["consumerAuthStatus", "trackAuthStatus"]) {
+
+    const status = $(id);
+
+    if (status) {
+      status.textContent = signedIn
+        ? "Signed in as " + (user.displayName || user.email) + "."
+        : "Sign in with Google or Apple to submit and track your complaints.";
+    }
+
+  }
+
+  for (const id of ["consumerAuthButtons", "trackAuthButtons"]) {
+
+    const buttons = $(id);
+
+    if (buttons) buttons.style.display = signedIn ? "none" : "flex";
+
+  }
+
+  for (const id of ["consumerSignOut", "trackSignOut"]) {
+
+    const button = $(id);
+
+    if (button) button.style.display = signedIn ? "block" : "none";
+
+  }
+
+  const submitButton = $("submitComplaintBtn");
+
+  if (submitButton) submitButton.disabled = !signedIn;
+
+}
+
+
 /* =====================================================
    CHARACTER COUNTER
    ===================================================== */
@@ -208,87 +235,8 @@ $("details").addEventListener(
 );
 
 
-$("mobile").addEventListener("input", function () {
-
-  verifiedConsumerMobile = "";
-
-  $("consumerOtpBox").style.display = "none";
-
-});
-
-
-async function consumerSendOtp() {
-
-  const mobile = $("mobile").value.trim();
-
-  if (!/^\d{10}$/.test(mobile)) {
-
-    showToast("Enter a valid 10-digit mobile number.");
-
-    $("mobile").focus();
-
-    return;
-
-  }
-
-  if (!window.fb) {
-
-    showToast("Still connecting. Try again in a moment.");
-
-    return;
-
-  }
-
-  try {
-
-    await fb.sendOtp(mobile);
-
-    $("consumerOtpBox").style.display = "flex";
-
-    $("consumerOtp").focus();
-
-    showToast("OTP sent to " + maskMobile(mobile));
-
-  } catch (error) {
-
-    console.error(error);
-
-    showToast(otpFailureMessage(error));
-
-  }
-
-}
-
-
-async function verifyConsumerOtp() {
-
-  const mobile = $("mobile").value.trim();
-
-  try {
-
-    await fb.confirmOtp($("consumerOtp").value.trim());
-
-    verifiedConsumerMobile = mobile;
-
-    $("consumerOtp").value = "";
-
-    $("consumerOtpBox").style.display = "none";
-
-    showToast("Mobile number verified.");
-
-  } catch (error) {
-
-    console.error(error);
-
-    showToast("Wrong or expired OTP.");
-
-  }
-
-}
-
-
 /* =====================================================
-   QUERY ID  (9 random digits, hard to guess)
+  QUERY ID  (9 random digits, hard to guess)
    ===================================================== */
 
 
@@ -332,9 +280,9 @@ $("complaintForm").addEventListener(
 
     }
 
-    if (verifiedConsumerMobile !== mobile) {
+    if (!window.fb || !fb.isConsumer()) {
 
-      showToast("Verify your mobile number with the OTP before submitting.");
+      showToast("Sign in with Google or Apple before submitting your complaint.");
 
       return;
 
@@ -406,6 +354,8 @@ $("complaintForm").addEventListener(
 
       $("charCount").textContent = "0/1000";
 
+      updateConsumerAuthUI(fb.currentUser());
+
       showPage("submitted");
 
     }
@@ -462,9 +412,8 @@ function trackFromHome() {
 /* =====================================================
    TRACK COMPLAINT
 
-   - With a Query ID  -> loaded directly.
-   - Mobile number only -> an OTP is sent first, so nobody
-     can read another person's complaints.
+   Only complaints owned by the signed-in Google/Apple
+   account can be loaded.
    ===================================================== */
 
 
@@ -522,7 +471,7 @@ function renderTrack(list) {
       </div>
 
       <p class="muted">
-        📱 SMS updates go to ${maskMobile(c.mobile)}
+        📱 Contact number: ${maskMobile(c.mobile)}
       </p>
 
       <p class="muted">
@@ -552,15 +501,6 @@ async function trackComplaint() {
   }
 
 
-  if (!mobile && !queryId) {
-
-    showToast("Enter your mobile number or Query ID.");
-
-    return;
-
-  }
-
-
   if (!window.fb) {
 
     showToast("Still connecting. Try again in a moment.");
@@ -569,67 +509,36 @@ async function trackComplaint() {
 
   }
 
+  if (!fb.isConsumer()) {
 
-  try {
+    showToast("Sign in with the account used to submit your complaint.");
 
-    if (queryId) {
-
-      if (!mobile) {
-
-        showToast("Enter the mobile number linked to this Query ID.");
-
-        return;
-
-      }
-
-
-    }
-
-    await fb.sendOtp(mobile);
-
-    $("trackOtpBox").style.display = "flex";
-
-    showToast("OTP sent to " + maskMobile(mobile));
+    return;
 
   }
 
-  catch (error) {
-
-    console.error(error);
-
-    showToast(otpFailureMessage(error));
-
-  }
-
-}
-
-
-async function verifyTrackOtp() {
 
   try {
 
-    await fb.confirmOtp($("trackOtp").value.trim());
-
-    const queryId = $("trackQueryId").value.trim().toUpperCase();
     let list;
 
     if (queryId) {
 
       const complaint = await fb.getComplaint(queryId);
 
-      list = complaint && complaint.mobile === $("trackMobile").value.trim()
+      list = complaint && (!mobile || complaint.mobile === mobile)
         ? [complaint]
         : [];
 
     } else {
 
-      list = await fb.listByMobile($("trackMobile").value.trim());
+      list = await fb.listByOwner();
+
+      if (mobile) {
+        list = list.filter(complaint => complaint.mobile === mobile);
+      }
 
     }
-
-    $("trackOtp").value = "";
-
-    $("trackOtpBox").style.display = "none";
 
     renderTrack(list);
 
@@ -639,7 +548,7 @@ async function verifyTrackOtp() {
 
     console.error(error);
 
-    showToast("Wrong or expired OTP.");
+    showToast("Could not access that complaint. Check the Query ID and sign in with the account used to submit it.");
 
   }
 
@@ -662,115 +571,25 @@ function maskMobile(mobile) {
 }
 
 
-/* =====================================================
-   SERVICE HANDLER LOGIN  (mobile number + OTP)
-
-   Only numbers listed in the Firestore "handlers"
-   collection are accepted (see firestore.rules).
-   ===================================================== */
-
-
-async function handlerSendOtp() {
-
-  const mobile = $("handlerMobile").value.trim();
-
-
-  if (!/^\d{10}$/.test(mobile)) {
-
-    showToast("Enter a valid 10-digit mobile number.");
-
-    return;
-
-  }
-
-
-  if (!window.fb) {
-
-    showToast("Still connecting. Try again in a moment.");
-
-    return;
-
-  }
-
-
-  try {
-
-    await fb.sendOtp(mobile);
-
-    $("otpBox").style.display = "flex";
-
-    $("handlerOtp").focus();
-
-    showToast("OTP sent to " + maskMobile(mobile));
-
-  }
-
-  catch (error) {
-
-    console.error(error);
-
-    showToast(otpFailureMessage(error));
-
-  }
-
-}
-
-
-$("loginForm").addEventListener(
-  "submit",
-  async function (event) {
-
-    event.preventDefault();
-
-    try {
-
-      await fb.confirmOtp($("handlerOtp").value.trim());
-
-    }
-
-    catch (error) {
-
-      showToast("Wrong or expired OTP.");
-
-      return;
-
-    }
-
-
-    if (!(await fb.isHandler())) {
-
-      await fb.logout();
-
-      showToast("This number is not registered as a service handler.");
-
-      return;
-
-    }
-
-
-    $("handlerOtp").value = "";
-
-    $("otpBox").style.display = "none";
-
-    startHandlerSession();
-
-    showPage("dashboard");
-
-    showToast("Service handler login successful.");
-
-  }
-);
-
-
 /* keeps the handler signed in after a page reload */
 
 window.addEventListener("fb-auth", async function (event) {
 
   const user = event.detail;
 
-  if (user && !handlerLoggedIn && await fb.isHandler()) {
+  updateConsumerAuthUI(user);
 
-    startHandlerSession();
+  if (!user || handlerLoggedIn) return;
+
+  try {
+
+    if (await fb.isHandler()) startHandlerSession();
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast("Could not verify service-handler access.");
 
   }
 

@@ -4,8 +4,6 @@ import {
   OAuthProvider,
   getAuth,
   onAuthStateChanged,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
   signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
@@ -41,10 +39,7 @@ const firebaseConfig = {
   appId: "1:1093062261347:web:fcaab57d667853776cd656"
 };
 
-const DEFAULT_COUNTRY_CODE = "+91";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
-let confirmationResult = null;
-let recaptchaVerifier = null;
 let auth = null;
 
 function normalizeMobile(value) {
@@ -55,19 +50,37 @@ function normalizeMobile(value) {
   return mobile;
 }
 
-function mobileFromPhone(phoneNumber) {
-  const digits = String(phoneNumber || "").replace(/\D/g, "");
-  if (!digits.startsWith("91") || digits.length !== 12) {
-    throw new Error("This portal currently supports Indian 10-digit mobile numbers.");
-  }
-  return digits.slice(2);
+function isConsumerUser(user) {
+  return Boolean(
+    user
+    && user.email
+    && user.emailVerified
+    && user.providerData.some(item =>
+      item.providerId === "google.com" || item.providerId === "apple.com"
+    )
+  );
 }
 
-function requireUser() {
-  if (!auth.currentUser) {
-    throw new Error("Verify your mobile number before continuing.");
+function requireConsumerUser() {
+  if (!isConsumerUser(auth.currentUser)) {
+    throw new Error("Sign in with a verified Google or Apple account first.");
   }
   return auth.currentUser;
+}
+
+function authProvider(providerName) {
+  if (providerName === "google") {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    return provider;
+  }
+  if (providerName === "apple") {
+    const provider = new OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    return provider;
+  }
+  throw new Error("Unsupported sign-in provider.");
 }
 
 function isFirebaseConfigured() {
@@ -86,37 +99,14 @@ if (!isFirebaseConfigured()) {
   const storage = getStorage(app);
 
   async function handlerRecord() {
-    const user = requireUser();
-    const provider = user.providerData.find(item =>
-      item.providerId === "google.com" || item.providerId === "apple.com"
-    );
-
-    if (provider) {
-      if (!user.email || !user.emailVerified) return false;
-      const snapshot = await getDoc(doc(db, "handlerAccounts", user.email));
-      return snapshot.exists()
-        && snapshot.data().email === user.email;
-    }
-
-    if (!user.phoneNumber) return false;
-    const mobile = mobileFromPhone(user.phoneNumber);
-    const snapshot = await getDoc(doc(db, "handlers", mobile));
-    return snapshot.exists() && snapshot.data().active === true;
+    const user = auth.currentUser;
+    if (!isConsumerUser(user)) return false;
+    const snapshot = await getDoc(doc(db, "handlerAccounts", user.email));
+    return snapshot.exists() && snapshot.data().email === user.email;
   }
 
   async function signInHandler(providerName) {
-    let provider;
-    if (providerName === "google") {
-      provider = new GoogleAuthProvider();
-    } else if (providerName === "apple") {
-      provider = new OAuthProvider("apple.com");
-      provider.addScope("email");
-      provider.addScope("name");
-    } else {
-      throw new Error("Unsupported sign-in provider.");
-    }
-
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, authProvider(providerName));
     const user = result.user;
     if (!(await handlerRecord())) {
       await signOut(auth);
@@ -133,31 +123,13 @@ if (!isFirebaseConfigured()) {
     return user;
   }
 
-  async function sendOtp(mobileValue) {
-    const mobile = normalizeMobile(mobileValue);
-    confirmationResult = null;
-    if (!recaptchaVerifier) {
-      recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible"
-      });
+  async function signInConsumer(providerName) {
+    const result = await signInWithPopup(auth, authProvider(providerName));
+    if (!isConsumerUser(result.user)) {
+      await signOut(auth);
+      throw new Error("Use a Google or Apple account with a verified email address.");
     }
-    confirmationResult = await signInWithPhoneNumber(
-      auth,
-      `${DEFAULT_COUNTRY_CODE}${mobile}`,
-      recaptchaVerifier
-    );
-  }
-
-  async function confirmOtp(code) {
-    if (!confirmationResult) {
-      throw new Error("Request a new OTP first.");
-    }
-    if (!/^\d{6}$/.test(String(code || "").trim())) {
-      throw new Error("Enter the 6-digit OTP.");
-    }
-    const result = await confirmationResult.confirm(String(code).trim());
-    confirmationResult = null;
-    return result;
+    return result.user;
   }
 
   async function uploadEvidence(user, complaintId, file, kind) {
@@ -177,11 +149,8 @@ if (!isFirebaseConfigured()) {
   }
 
   async function createComplaint(complaint, imageFile, docFile) {
-    const user = requireUser();
-    const mobile = mobileFromPhone(user.phoneNumber);
-    if (mobile !== normalizeMobile(complaint.mobile)) {
-      throw new Error("Verify the same mobile number entered on the form.");
-    }
+    const user = requireConsumerUser();
+    const mobile = normalizeMobile(complaint.mobile);
 
     const uploaded = [];
     try {
@@ -231,16 +200,13 @@ if (!isFirebaseConfigured()) {
   }
 
   async function getComplaint(id) {
+    requireConsumerUser();
     const snapshot = await getDoc(doc(db, "complaints", id));
     return snapshot.exists() ? snapshot.data() : null;
   }
 
-  async function listByMobile(mobileValue) {
-    const user = requireUser();
-    const mobile = normalizeMobile(mobileValue);
-    if (mobileFromPhone(user.phoneNumber) !== mobile) {
-      throw new Error("Verify the mobile number used for the complaint.");
-    }
+  async function listByOwner() {
+    const user = requireConsumerUser();
     const complaintsQuery = query(
       collection(db, "complaints"),
       where("ownerUid", "==", user.uid)
@@ -263,15 +229,16 @@ if (!isFirebaseConfigured()) {
   }
 
   window.fb = {
-    sendOtp,
-    confirmOtp,
     createComplaint,
     listen,
     getComplaint,
-    listByMobile,
+    listByOwner,
     respond,
     isHandler: handlerRecord,
+    isConsumer: () => isConsumerUser(auth.currentUser),
+    currentUser: () => auth.currentUser,
     signInHandler,
+    signInConsumer,
     logout: () => signOut(auth)
   };
 

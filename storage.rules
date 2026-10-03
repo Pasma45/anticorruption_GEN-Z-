@@ -3,18 +3,9 @@ service firebase.storage {
   match /b/{bucket}/o {
     function handler() {
       return request.auth != null
-        && (
-          (
-            request.auth.token.phone_number is string
-            && request.auth.token.phone_number.matches('^\\+91[0-9]{10}$')
-            && firestore.get(/databases/(default)/documents/handlers/$(request.auth.token.phone_number.substring(3))).data.active == true
-          )
-          || (
-            request.auth.token.email_verified == true
-            && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
-            && firestore.get(/databases/(default)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email
-          )
-        );
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
+        && firestore.get(/databases/(default)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email;
     }
 
     match /complaints/{ownerUid}/{complaintId}/{fileName} {
