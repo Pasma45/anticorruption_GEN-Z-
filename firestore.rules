@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function authMobile() {
+      return signedIn()
+        && request.auth.token.phone_number is string
+        && request.auth.token.phone_number.matches('^\\+91[0-9]{10}$')
+        ? request.auth.token.phone_number.split('\\+91')[1]
+        : '';
+    }
+
+    function handler() {
+      return authMobile() != ''
+        && exists(/databases/$(database)/documents/handlers/$(authMobile()))
+        && get(/databases/$(database)/documents/handlers/$(authMobile())).data.active == true;
+    }
+
+    match /handlers/{mobile} {
+      allow get: if signedIn() && mobile == authMobile();
+      allow list, create, update, delete: if false;
+    }
+
+    match /complaints/{complaintId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.mobile == authMobile()
+        && request.resource.data.id == complaintId
+        && request.resource.data.status == 'Pending'
+        && request.resource.data.response == ''
+        && request.resource.data.keys().hasOnly([
+          'id', 'mobile', 'name', 'location', 'issue', 'details',
+          'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
+          'documentUrl', 'documentPath', 'documentName', 'created',
+          'updated', 'createdAt'
+        ])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.details is string
+        && request.resource.data.details.size() > 0
+        && request.resource.data.details.size() <= 1000;
+
+      allow get, list: if handler()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid);
+
+      allow update: if handler()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'response', 'updated'])
+        && request.resource.data.status in ['Pending', 'Under Review', 'Resolved', 'Rejected']
+        && request.resource.data.response is string
+        && request.resource.data.response.size() <= 1000;
+
+      allow delete: if false;
+    }
+
+    match /smsNotifications/{notificationId} {
+      allow read, write: if false;
+    }
+  }
+}

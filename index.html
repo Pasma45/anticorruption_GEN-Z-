@@ -287,6 +287,13 @@
           placeholder="Enter 10-digit mobile number"
         >
 
+        <button
+          type="button"
+          class="secondary"
+          onclick="consumerSendOtp()">
+          Send Verification OTP
+        </button>
+
       </label>
 
 
@@ -398,18 +405,30 @@
 
     </div>
 
+    <div id="consumerOtpBox" class="otp-box">
+      <input
+        id="consumerOtp"
+        maxlength="6"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        placeholder="Enter the 6-digit OTP">
+      <button
+        type="button"
+        class="primary"
+        onclick="verifyConsumerOtp()">
+        Verify Mobile
+      </button>
+    </div>
+
 
     <div class="notice">
 
-      🔐 Your mobile number is required so the portal
-      can associate status updates and the officer
-      response with your complaint.
+      🔐 Verify your mobile number before submitting so only you can
+      access your complaint history and evidence.
 
       <br><br>
 
-      This front-end demo shows an SMS notification
-      preview. Real SMS requires a secure server
-      and SMS provider.
+      The service handler's response will be sent to this number by SMS.
 
     </div>
 
@@ -494,8 +513,7 @@
 
 
 <!-- ================= TRACK ================= -->
-<head> <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3157493936030014"
-     crossorigin="anonymous"></script> </head>
+
 <section id="track" class="page">
 
   <div class="section-heading">
@@ -511,7 +529,8 @@
       </h1>
 
       <p>
-        Use your mobile number and optionally a Query ID.
+        Enter your mobile number to verify with an OTP. Add your Query ID
+        to check one specific complaint.
       </p>
 
     </div>
@@ -541,7 +560,7 @@
 
       <input
         id="trackQueryId"
-        placeholder="Query ID e.g. AC-2026-123456"
+        placeholder="Query ID e.g. AC-2026-123456789"
       >
 
       <button
@@ -556,6 +575,13 @@
 
   </div>
 
+
+  <div id="trackOtpBox" class="panel inline-form otp-box">
+    <input id="trackOtp" maxlength="6" inputmode="numeric"
+           autocomplete="one-time-code"
+           placeholder="Enter the OTP sent to your mobile">
+    <button class="primary" onclick="verifyTrackOtp()">Verify OTP</button>
+  </div>
 
   <div id="trackResult"></div>
 
@@ -597,91 +623,51 @@
       </h1>
 
       <p class="muted">
-        Authorised personnel only.
+        Authorised personnel only. Enter your registered mobile
+        number to receive a one-time password (OTP).
       </p>
 
-
       <label>
-
-        Username / Email
-
+        Mobile Number
         <input
-          id="username"
-          required
-          autocomplete="username"
-          placeholder="Enter handler username"
+          id="handlerMobile"
+          type="tel"
+          maxlength="10"
+          inputmode="numeric"
+          autocomplete="tel-national"
+          placeholder="10-digit registered mobile number"
         >
-
       </label>
 
+      <button
+        id="sendOtpBtn"
+        type="button"
+        class="secondary wide"
+        onclick="handlerSendOtp()">
+        Send OTP
+      </button>
 
-      <label>
-
-        Password
+      <div id="otpBox" class="otp-box">
 
         <input
-          id="password"
-          type="password"
-          required
-          autocomplete="current-password"
-          placeholder="Enter password"
+          id="handlerOtp"
+          maxlength="6"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="Enter 6-digit OTP"
         >
 
-      </label>
-
-
-      <!-- CAPTCHA -->
-
-      <div class="captcha-box">
-
-        <div>
-
-          <b>
-            Security Verification
-          </b>
-
-          <span id="captchaQuestion">
-          </span>
-
-        </div>
-
-
-        <button
-          type="button"
-          class="secondary captcha-refresh"
-          onclick="generateCaptcha()">
-
-          ↻
-
+        <button class="primary" type="submit">
+          Verify &amp; Login
         </button>
 
       </div>
-
-
-      <input
-        id="captchaAnswer"
-        required
-        inputmode="numeric"
-        placeholder="Enter CAPTCHA answer"
-      >
-
-
-      <button
-        class="primary wide"
-        type="submit">
-
-        Login
-
-      </button>
-
 
       <button
         type="button"
         class="secondary wide"
         onclick="showPage('home')">
-
         Back to Home
-
       </button>
 
     </form>
@@ -783,6 +769,7 @@
               <th>Complainant</th>
               <th>Issue</th>
               <th>Status</th>
+              <th>Evidence</th>
               <th>Action</th>
 
             </tr>
@@ -895,6 +882,9 @@
     </label>
 
 
+    <div id="solutionDetails" class="notice"></div>
+
+
     <br>
 
 
@@ -904,6 +894,7 @@
 
       <textarea
         id="solutionText"
+        maxlength="1000"
         placeholder="Write the action taken or solution..."
       ></textarea>
 
@@ -1104,7 +1095,10 @@
 </div>
 
 
+<div id="recaptcha-container"></div>
+
 <script src="script.js"></script>
+<script type="module" src="firebase.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,13 @@
+{
+  "name": "anti-corruption-portal-functions",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.3.0",
+    "twilio": "^5.4.0"
+  }
+}

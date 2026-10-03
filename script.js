@@ -1,16 +1,29 @@
 /* =====================================================
-   ANTI CORRUPTION PORTAL
+   ANTI CORRUPTION PORTAL  (Firebase version)
+
+   Data is stored in Firestore / Storage (see firebase.js).
+   Nothing is saved in localStorage any more.
    ===================================================== */
 
 
-const STORAGE_KEY = "antiCorruptionComplaints";
-
-let complaints =
-  JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+let complaints = [];            // live list for the handler dashboard
 
 let currentComplaint = null;
 
-let captchaAnswer = null;
+let handlerLoggedIn = false;
+
+let stopListening = null;
+
+let knownIds = null;            // used to announce NEW complaints
+
+let verifiedConsumerMobile = "";
+
+
+const PROTECTED_PAGES = [
+  "dashboard",
+  "give-solution",
+  "profile"
+];
 
 
 /* =====================================================
@@ -23,13 +36,9 @@ function $(id) {
 }
 
 
-function saveComplaints() {
-
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(complaints)
-  );
-
+/* only allow https links (stops javascript: links) */
+function safeUrl(url) {
+  return /^https:\/\//.test(url || "") ? url : "";
 }
 
 
@@ -40,49 +49,33 @@ function saveComplaints() {
 
 function showPage(id) {
 
+  /* handler pages need a verified handler login */
+  if (PROTECTED_PAGES.includes(id) && !handlerLoggedIn) {
+
+    id = "handler-login";
+
+    showToast("Please log in as a service handler.");
+
+  }
+
+
   document
     .querySelectorAll(".page")
-    .forEach(page => {
-
-      page.classList.remove("active");
-
-    });
+    .forEach(page => page.classList.remove("active"));
 
 
   const page = $(id);
 
   if (!page) return;
 
-
   page.classList.add("active");
 
 
-  if (id === "dashboard") {
+  if (id === "dashboard") renderDashboard();
 
-    renderDashboard();
+  if (id === "give-solution") populateSolutionSelect();
 
-  }
-
-
-  if (id === "give-solution") {
-
-    populateSolutionSelect();
-
-  }
-
-
-  if (id === "take-action") {
-
-    renderActions();
-
-  }
-
-
-  if (id === "handler-login") {
-
-    generateCaptcha();
-
-  }
+  if (id === "take-action") renderActions();
 
 
   window.scrollTo({
@@ -111,7 +104,7 @@ function showToast(message) {
 
     toast.classList.remove("show");
 
-  }, 3000);
+  }, 3500);
 
 }
 
@@ -132,66 +125,123 @@ $("details").addEventListener(
 );
 
 
-/* =====================================================
-   QUERY ID
-   ===================================================== */
+$("mobile").addEventListener("input", function () {
+
+  verifiedConsumerMobile = "";
+
+  $("consumerOtpBox").style.display = "none";
+
+});
 
 
-function generateQueryId() {
+async function consumerSendOtp() {
 
-  const year =
-    new Date().getFullYear();
+  const mobile = $("mobile").value.trim();
 
+  if (!/^\d{10}$/.test(mobile)) {
 
-  let id;
+    showToast("Enter a valid 10-digit mobile number.");
 
+    $("mobile").focus();
 
-  do {
-
-    id =
-      "AC-" +
-      year +
-      "-" +
-      Math.floor(
-        100000 +
-        Math.random() * 900000
-      );
+    return;
 
   }
 
-  while (
-    complaints.some(
-      complaint => complaint.id === id
-    )
-  );
+  if (!window.fb) {
+
+    showToast("Still connecting. Try again in a moment.");
+
+    return;
+
+  }
+
+  try {
+
+    await fb.sendOtp(mobile);
+
+    $("consumerOtpBox").style.display = "flex";
+
+    $("consumerOtp").focus();
+
+    showToast("OTP sent to " + maskMobile(mobile));
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast("Could not send the OTP. Please try again.");
+
+  }
+
+}
 
 
-  return id;
+async function verifyConsumerOtp() {
+
+  const mobile = $("mobile").value.trim();
+
+  try {
+
+    await fb.confirmOtp($("consumerOtp").value.trim());
+
+    verifiedConsumerMobile = mobile;
+
+    $("consumerOtp").value = "";
+
+    $("consumerOtpBox").style.display = "none";
+
+    showToast("Mobile number verified.");
+
+  } catch (error) {
+
+    console.error(error);
+
+    showToast("Wrong or expired OTP.");
+
+  }
 
 }
 
 
 /* =====================================================
-   CONSUMER COMPLAINT
+   QUERY ID  (9 random digits, hard to guess)
    ===================================================== */
+
+
+function generateQueryId() {
+
+  const n =
+    crypto.getRandomValues(new Uint32Array(1))[0] % 900000000
+    + 100000000;
+
+  return "AC-" + new Date().getFullYear() + "-" + n;
+
+}
+
+
+/* =====================================================
+   CONSUMER COMPLAINT  (saves to Firestore + Storage)
+   ===================================================== */
+
+
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 
 $("complaintForm").addEventListener(
   "submit",
-  function (event) {
+  async function (event) {
 
     event.preventDefault();
 
+    const form = this;
 
-    const mobile =
-      $("mobile").value.trim();
+    const mobile = $("mobile").value.trim();
 
 
     if (!/^\d{10}$/.test(mobile)) {
 
-      showToast(
-        "Enter a valid 10-digit mobile number."
-      );
+      showToast("Enter a valid 10-digit mobile number.");
 
       $("mobile").focus();
 
@@ -199,70 +249,99 @@ $("complaintForm").addEventListener(
 
     }
 
+    if (verifiedConsumerMobile !== mobile) {
 
-    const complaint = {
+      showToast("Verify your mobile number with the OTP before submitting.");
 
-      id: generateQueryId(),
+      return;
 
-      mobile: mobile,
-
-      name:
-        $("name").value.trim() ||
-        "Anonymous",
-
-      location:
-        $("location").value.trim(),
-
-      issue:
-        $("issue").value,
-
-      details:
-        $("details").value.trim(),
-
-      imageName:
-        $("image").files[0]?.name || "",
-
-      documentName:
-        $("document").files[0]?.name || "",
-
-      status: "Pending",
-
-      response: "",
-
-      created:
-        new Date().toLocaleString(),
-
-      updated:
-        new Date().toLocaleString()
-
-    };
+    }
 
 
-    complaints.unshift(
-      complaint
-    );
+    const imageFile = $("image").files[0];
+
+    const docFile = $("document").files[0];
 
 
-    saveComplaints();
+    for (const file of [imageFile, docFile]) {
+
+      if (file && file.size > MAX_FILE_BYTES) {
+
+        showToast("Each file must be smaller than 5 MB.");
+
+        return;
+
+      }
+
+    }
 
 
-    currentComplaint =
-      complaint;
+    if (!window.fb) {
+
+      showToast("Still connecting. Try again in a moment.");
+
+      return;
+
+    }
 
 
-    $("submittedId").textContent =
-      "Query ID: " +
-      complaint.id;
+    const button = form.querySelector('button[type="submit"]');
+
+    const label = button.textContent;
+
+    button.disabled = true;
+
+    button.textContent = "Submitting...";
 
 
-    this.reset();
+    try {
+
+      const complaint = {
+
+        id: generateQueryId(),
+
+        mobile: mobile,
+
+        name: $("name").value.trim() || "Anonymous",
+
+        location: $("location").value.trim(),
+
+        issue: $("issue").value,
+
+        details: $("details").value.trim()
+
+      };
 
 
-    $("charCount").textContent =
-      "0/1000";
+      await fb.createComplaint(complaint, imageFile, docFile);
 
 
-    showPage("submitted");
+      $("submittedId").textContent =
+        "Query ID: " + complaint.id;
+
+      form.reset();
+
+      $("charCount").textContent = "0/1000";
+
+      showPage("submitted");
+
+    }
+
+    catch (error) {
+
+      console.error(error);
+
+      showToast("Could not submit the complaint. Please try again.");
+
+    }
+
+    finally {
+
+      button.disabled = false;
+
+      button.textContent = label;
+
+    }
 
   }
 );
@@ -299,32 +378,91 @@ function trackFromHome() {
 
 /* =====================================================
    TRACK COMPLAINT
+
+   - With a Query ID  -> loaded directly.
+   - Mobile number only -> an OTP is sent first, so nobody
+     can read another person's complaints.
    ===================================================== */
 
 
-function trackComplaint() {
+function renderTrack(list) {
 
-  const mobile =
-    $("trackMobile")
-      .value
-      .trim();
+  if (!list.length) {
+
+    $("trackResult").innerHTML = `
+      <div class="panel">
+        <p>No complaint found. Check your mobile number and Query ID.</p>
+      </div>`;
+
+    return;
+
+  }
 
 
-  const queryId =
-    $("trackQueryId")
-      .value
-      .trim()
-      .toUpperCase();
+  $("trackResult").innerHTML = list.map(c => `
+
+    <div class="panel complaint-result">
+
+      <h2>
+        ${escapeHTML(c.id)}
+        <span class="status ${escapeHTML(c.status).replace(/\s.*/, "")}">
+          ${escapeHTML(c.status)}
+        </span>
+      </h2>
+
+      <p><b>Issue:</b> ${escapeHTML(c.issue)}</p>
+
+      <p><b>Submitted:</b> ${escapeHTML(c.created)}</p>
+
+      <p>${escapeHTML(c.details)}</p>
+
+      ${c.location
+        ? `<p><b>Location:</b> ${escapeHTML(c.location)}</p>` : ""}
+
+      ${safeUrl(c.imageUrl)
+        ? `<p><a href="${escapeHTML(safeUrl(c.imageUrl))}"
+              target="_blank" rel="noopener">
+              <img class="evidence-img"
+                   src="${escapeHTML(safeUrl(c.imageUrl))}"
+                   alt="Attached image"></a></p>` : ""}
+
+      ${safeUrl(c.documentUrl)
+        ? `<p class="muted">Document:
+              <a href="${escapeHTML(safeUrl(c.documentUrl))}"
+                 target="_blank" rel="noopener">
+                 ${escapeHTML(c.documentName)}</a></p>` : ""}
+
+      <div class="notice">
+        ${c.response
+          ? `<b>Officer Response:</b> ${escapeHTML(c.response)}`
+          : "⏳ Your complaint is under review. The service officer will reply soon."}
+      </div>
+
+      <p class="muted">
+        📱 SMS updates go to ${maskMobile(c.mobile)}
+      </p>
+
+      <p class="muted">
+        <b>Last updated:</b> ${escapeHTML(c.updated)}
+      </p>
+
+    </div>
+
+  `).join("");
+
+}
 
 
-  if (
-    mobile &&
-    !/^\d{10}$/.test(mobile)
-  ) {
+async function trackComplaint() {
 
-    showToast(
-      "Enter a valid 10-digit mobile number."
-    );
+  const mobile = $("trackMobile").value.trim();
+
+  const queryId = $("trackQueryId").value.trim().toUpperCase();
+
+
+  if (mobile && !/^\d{10}$/.test(mobile)) {
+
+    showToast("Enter a valid 10-digit mobile number.");
 
     return;
 
@@ -333,249 +471,94 @@ function trackComplaint() {
 
   if (!mobile && !queryId) {
 
-    showToast(
-      "Enter your mobile number or Query ID."
-    );
+    showToast("Enter your mobile number or Query ID.");
 
     return;
 
   }
 
 
-  let list =
-    complaints;
+  if (!window.fb) {
 
-
-  if (mobile) {
-
-    list =
-      list.filter(
-        complaint =>
-          complaint.mobile === mobile
-      );
-
-  }
-
-
-  if (queryId) {
-
-    list =
-      list.filter(
-        complaint =>
-          complaint.id === queryId
-      );
-
-  }
-
-
-  if (!list.length) {
-
-    $("trackResult").innerHTML = `
-
-      <div class="panel">
-
-        <p>
-          No complaint found.
-          Check your mobile number
-          and Query ID.
-        </p>
-
-      </div>
-
-    `;
+    showToast("Still connecting. Try again in a moment.");
 
     return;
 
   }
 
 
-  $("trackResult").innerHTML =
+  try {
 
-    list.map(complaint => `
+    if (queryId) {
 
-      <div class="panel complaint-result">
+      if (!mobile) {
 
-        <h2>
+        showToast("Enter the mobile number linked to this Query ID.");
 
-          ${escapeHTML(complaint.id)}
+        return;
 
-          <span class="status ${escapeHTML(
-            complaint.status
-          )}">
+      }
 
-            ${escapeHTML(
-              complaint.status
-            )}
 
-          </span>
+    }
 
-        </h2>
+    await fb.sendOtp(mobile);
 
+    $("trackOtpBox").style.display = "flex";
 
-        <p>
+    showToast("OTP sent to " + maskMobile(mobile));
 
-          <b>Issue:</b>
+  }
 
-          ${escapeHTML(
-            complaint.issue
-          )}
+  catch (error) {
 
-        </p>
+    console.error(error);
 
+    showToast("Could not complete the request. Please try again.");
 
-        <p>
+  }
 
-          <b>Submitted:</b>
+}
 
-          ${escapeHTML(
-            complaint.created
-          )}
 
-        </p>
+async function verifyTrackOtp() {
 
+  try {
 
-        <p>
+    await fb.confirmOtp($("trackOtp").value.trim());
 
-          ${escapeHTML(
-            complaint.details
-          )}
+    const queryId = $("trackQueryId").value.trim().toUpperCase();
+    let list;
 
-        </p>
+    if (queryId) {
 
+      const complaint = await fb.getComplaint(queryId);
 
-        ${
-          complaint.location
+      list = complaint && complaint.mobile === $("trackMobile").value.trim()
+        ? [complaint]
+        : [];
 
-          ? `
+    } else {
 
-            <p>
+      list = await fb.listByMobile($("trackMobile").value.trim());
 
-              <b>Location:</b>
+    }
 
-              ${escapeHTML(
-                complaint.location
-              )}
+    $("trackOtp").value = "";
 
-            </p>
+    $("trackOtpBox").style.display = "none";
 
-          `
+    renderTrack(list);
 
-          : ""
+  }
 
-        }
+  catch (error) {
 
+    console.error(error);
 
-        ${
-          complaint.imageName
+    showToast("Wrong or expired OTP.");
 
-          ? `
-
-            <p class="muted">
-
-              Image attached:
-
-              ${escapeHTML(
-                complaint.imageName
-              )}
-
-            </p>
-
-          `
-
-          : ""
-
-        }
-
-
-        ${
-          complaint.documentName
-
-          ? `
-
-            <p class="muted">
-
-              Document attached:
-
-              ${escapeHTML(
-                complaint.documentName
-              )}
-
-            </p>
-
-          `
-
-          : ""
-
-        }
-
-
-        <div class="notice">
-
-          ${
-            complaint.response
-
-            ? `
-
-              <b>
-                Officer Response:
-              </b>
-
-              ${escapeHTML(
-                complaint.response
-              )}
-
-            `
-
-            : `
-
-              ⏳ Your complaint is
-              under review.
-
-              The service officer
-              will reply soon.
-
-            `
-
-          }
-
-        </div>
-
-
-        <p class="muted">
-
-          📱 Mobile notification:
-
-          ${
-            complaint.response
-
-            ? "Solution/status notification prepared for "
-
-            : "Status notification prepared for "
-
-          }
-
-          ${maskMobile(
-            complaint.mobile
-          )}
-
-        </p>
-
-
-        <p class="muted">
-
-          <b>
-            Last updated:
-          </b>
-
-          ${escapeHTML(
-            complaint.updated
-          )}
-
-        </p>
-
-      </div>
-
-    `).join("");
+  }
 
 }
 
@@ -597,141 +580,192 @@ function maskMobile(mobile) {
 
 
 /* =====================================================
-   CAPTCHA
+   SERVICE HANDLER LOGIN  (mobile number + OTP)
+
+   Only numbers listed in the Firestore "handlers"
+   collection are accepted (see firestore.rules).
    ===================================================== */
 
 
-function generateCaptcha() {
+async function handlerSendOtp() {
 
-  const a =
-    Math.floor(
-      Math.random() * 9
-    ) + 1;
+  const mobile = $("handlerMobile").value.trim();
 
 
-  const b =
-    Math.floor(
-      Math.random() * 9
-    ) + 1;
+  if (!/^\d{10}$/.test(mobile)) {
+
+    showToast("Enter a valid 10-digit mobile number.");
+
+    return;
+
+  }
 
 
-  captchaAnswer =
-    a + b;
+  if (!window.fb) {
+
+    showToast("Still connecting. Try again in a moment.");
+
+    return;
+
+  }
 
 
-  $("captchaQuestion")
-    .textContent =
-      `${a} + ${b} = ?`;
+  try {
 
+    await fb.sendOtp(mobile);
 
-  $("captchaAnswer")
-    .value = "";
+    $("otpBox").style.display = "flex";
+
+    $("handlerOtp").focus();
+
+    showToast("OTP sent to " + maskMobile(mobile));
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    showToast("Could not send the OTP. Please try again.");
+
+  }
 
 }
 
 
-/* =====================================================
-   SERVICE HANDLER LOGIN
-   ===================================================== */
-
-
 $("loginForm").addEventListener(
   "submit",
-  function (event) {
+  async function (event) {
 
     event.preventDefault();
 
+    try {
 
-    const username =
-      $("username")
-        .value
-        .trim();
-
-
-    const password =
-      $("password")
-        .value;
-
-
-    const answer =
-      Number(
-        $("captchaAnswer").value
-      );
-
-
-    /*
-      DEMO LOGIN
-
-      Username:
-      ___________
-
-      Password:
-      ________
-
-      IMPORTANT:
-      For a real website these credentials
-      must NOT be stored in JavaScript.
-    */
-
-
-    if (
-
-      username === "Empo@Log$45" &&
-
-      password === "PC2$7908" &&
-
-      answer === captchaAnswer
-
-    ) {
-
-      sessionStorage.setItem(
-        "handlerLoggedIn",
-        "true"
-      );
-
-
-      showPage("dashboard");
-
-
-      showToast(
-        "Service handler login successful."
-      );
+      await fb.confirmOtp($("handlerOtp").value.trim());
 
     }
 
-    else {
+    catch (error) {
 
-      showToast(
-        "Invalid credentials or CAPTCHA."
-      );
+      showToast("Wrong or expired OTP.");
 
-
-      generateCaptcha();
+      return;
 
     }
+
+
+    if (!(await fb.isHandler())) {
+
+      await fb.logout();
+
+      showToast("This number is not registered as a service handler.");
+
+      return;
+
+    }
+
+
+    $("handlerOtp").value = "";
+
+    $("otpBox").style.display = "none";
+
+    startHandlerSession();
+
+    showPage("dashboard");
+
+    showToast("Service handler login successful.");
 
   }
 );
 
 
+/* keeps the handler signed in after a page reload */
+
+window.addEventListener("fb-auth", async function (event) {
+
+  const user = event.detail;
+
+  if (user && !handlerLoggedIn && await fb.isHandler()) {
+
+    startHandlerSession();
+
+  }
+
+});
+
+
 /* =====================================================
-   LOGOUT
+   LIVE COMPLAINT LIST  (new complaints appear instantly)
    ===================================================== */
 
 
-function logout() {
+function startHandlerSession() {
 
-  sessionStorage.removeItem(
-    "handlerLoggedIn"
+  handlerLoggedIn = true;
+
+  if (stopListening) stopListening();
+
+  knownIds = null;
+
+
+  stopListening = fb.listen(
+
+    function (list) {
+
+      if (knownIds) {
+
+        const fresh = list.filter(c => !knownIds.has(c.id));
+
+        if (fresh.length) {
+
+          showToast("New complaint received: " + fresh[0].id);
+
+        }
+
+      }
+
+      knownIds = new Set(list.map(c => c.id));
+
+      complaints = list;
+
+
+      if ($("dashboard").classList.contains("active")) {
+
+        renderDashboard();
+
+      }
+
+    },
+
+    function (error) {
+
+      console.error(error);
+
+      showToast("Could not load complaints.");
+
+    }
+
   );
+
+}
+
+
+async function logout() {
+
+  if (stopListening) stopListening();
+
+  stopListening = null;
+
+  handlerLoggedIn = false;
+
+  complaints = [];
+
+  try { await fb.logout(); } catch (error) { console.error(error); }
 
 
   showPage("home");
 
-
-  showToast(
-    "Logged out successfully."
-  );
+  showToast("Logged out successfully.");
 
 }
 
@@ -741,468 +775,259 @@ function logout() {
    ===================================================== */
 
 
+function evidenceHTML(c) {
+
+  const url = safeUrl(c.imageUrl);
+
+  return url
+
+    ? `<a href="${escapeHTML(url)}" target="_blank" rel="noopener">
+         <img class="thumb" src="${escapeHTML(url)}" alt="Evidence"></a>`
+
+    : "—";
+
+}
+
+
+function renderRows(list) {
+
+  if (!list.length) {
+
+    $("complaintsTable").innerHTML =
+      `<tr><td colspan="6">No complaints yet.</td></tr>`;
+
+    return;
+
+  }
+
+
+  $("complaintsTable").innerHTML = list.map(c => `
+
+    <tr>
+
+      <td>${escapeHTML(c.id)}</td>
+
+      <td>${escapeHTML(c.name)}<br>
+          <small>${escapeHTML(c.mobile)}</small></td>
+
+      <td>${escapeHTML(c.issue)}</td>
+
+      <td>
+        <span class="status ${escapeHTML(c.status).replace(/\s.*/, "")}">
+          ${escapeHTML(c.status)}
+        </span>
+      </td>
+
+      <td>${evidenceHTML(c)}</td>
+
+      <td>
+        <button class="secondary"
+                onclick="openComplaint('${escapeJS(c.id)}')">
+          View
+        </button>
+      </td>
+
+    </tr>
+
+  `).join("");
+
+}
+
+
 function renderDashboard() {
 
-  const total =
-    complaints.length;
-
-
-  const valid =
-    complaints.filter(
-      complaint =>
-        complaint.status !== "Rejected"
-    ).length;
-
-
-  const pending =
-    complaints.filter(
-      complaint =>
-        complaint.status === "Pending" ||
-        complaint.status === "Under Review"
-    ).length;
-
-
-  const resolved =
-    complaints.filter(
-      complaint =>
-        complaint.status === "Resolved"
-    ).length;
-
-
-  $("totalStat").textContent =
-    total;
-
+  $("totalStat").textContent = complaints.length;
 
   $("validStat").textContent =
-    valid;
-
+    complaints.filter(c => c.status !== "Rejected").length;
 
   $("pendingStat").textContent =
-    pending;
-
+    complaints.filter(
+      c => c.status === "Pending" || c.status === "Under Review"
+    ).length;
 
   $("resolvedStat").textContent =
-    resolved;
+    complaints.filter(c => c.status === "Resolved").length;
 
 
-  $("complaintsTable").innerHTML =
-
-    complaints.map(
-      complaint => `
-
-        <tr>
-
-          <td>
-            ${escapeHTML(
-              complaint.id
-            )}
-          </td>
-
-          <td>
-            ${escapeHTML(
-              complaint.name
-            )}
-          </td>
-
-          <td>
-            ${escapeHTML(
-              complaint.issue
-            )}
-          </td>
-
-          <td>
-
-            <span
-              class="status ${escapeHTML(
-                complaint.status
-              )}">
-
-              ${escapeHTML(
-                complaint.status
-              )}
-
-            </span>
-
-          </td>
-
-          <td>
-
-            <button
-              class="secondary"
-              onclick="openComplaint('${escapeJS(
-                complaint.id
-              )}')">
-
-              View
-
-            </button>
-
-          </td>
-
-        </tr>
-
-      `
-    ).join("");
-
-
-  if (!complaints.length) {
-
-    $("complaintsTable").innerHTML = `
-
-      <tr>
-
-        <td colspan="5">
-
-          No complaints yet.
-
-        </td>
-
-      </tr>
-
-    `;
-
-  }
+  renderRows(complaints);
 
 }
-
-
-/* =====================================================
-   OPEN COMPLAINT
-   ===================================================== */
-
-
-function openComplaint(id) {
-
-  const complaint =
-    complaints.find(
-      item =>
-        item.id === id
-    );
-
-
-  if (!complaint) return;
-
-
-  currentComplaint =
-    complaint;
-
-
-  showPage(
-    "give-solution"
-  );
-
-
-  $("solutionComplaint")
-    .value =
-      complaint.id;
-
-
-  $("solutionText")
-    .value =
-      complaint.response || "";
-
-
-  $("solutionStatus")
-    .value =
-      complaint.status === "Resolved"
-
-        ? "Resolved"
-
-        : complaint.status === "Rejected"
-
-        ? "Rejected"
-
-        : "Under Review";
-
-}
-
-
-/* =====================================================
-   SOLUTION SELECT
-   ===================================================== */
-
-
-function populateSolutionSelect() {
-
-  $("solutionComplaint")
-    .innerHTML =
-
-      complaints.map(
-        complaint => `
-
-          <option
-            value="${escapeHTML(
-              complaint.id
-            )}">
-
-            ${escapeHTML(
-              complaint.id
-            )}
-
-            —
-
-            ${escapeHTML(
-              complaint.name
-            )}
-
-            —
-
-            ${escapeHTML(
-              complaint.issue
-            )}
-
-          </option>
-
-        `
-      ).join("");
-
-
-  if (!complaints.length) {
-
-    $("solutionComplaint")
-      .innerHTML =
-
-      `<option value="">
-        No complaints
-      </option>`;
-
-    return;
-
-  }
-
-
-  if (currentComplaint) {
-
-    $("solutionComplaint")
-      .value =
-        currentComplaint.id;
-
-  }
-
-}
-
-
-/* =====================================================
-   SOLUTION SELECT CHANGE
-   ===================================================== */
-
-
-$("solutionComplaint")
-  .addEventListener(
-    "change",
-    function () {
-
-      const complaint =
-        complaints.find(
-          item =>
-            item.id === this.value
-        );
-
-
-      if (!complaint) return;
-
-
-      $("solutionText")
-        .value =
-          complaint.response || "";
-
-
-      $("solutionStatus")
-        .value =
-          complaint.status === "Resolved"
-
-            ? "Resolved"
-
-            : complaint.status === "Rejected"
-
-            ? "Rejected"
-
-            : "Under Review";
-
-    }
-  );
-
-
-/* =====================================================
-   SEND SOLUTION
-   ===================================================== */
-
-
-function sendSolution() {
-
-  const id =
-    $("solutionComplaint")
-      .value;
-
-
-  const complaint =
-    complaints.find(
-      item =>
-        item.id === id
-    );
-
-
-  if (!complaint) {
-
-    showToast(
-      "No complaint selected."
-    );
-
-    return;
-
-  }
-
-
-  const response =
-    $("solutionText")
-      .value
-      .trim();
-
-
-  if (!response) {
-
-    showToast(
-      "Write a response first."
-    );
-
-    return;
-
-  }
-
-
-  complaint.response =
-    response;
-
-
-  complaint.status =
-    $("solutionStatus")
-      .value;
-
-
-  complaint.updated =
-    new Date()
-      .toLocaleString();
-
-
-  /*
-    Notification preview.
-
-    Real SMS requires a backend.
-  */
-
-
-  complaint.notification = {
-
-    type: "SMS preview",
-
-    preparedAt:
-      new Date()
-        .toLocaleString(),
-
-    mobile:
-      complaint.mobile
-
-  };
-
-
-  saveComplaints();
-
-
-  showToast(
-    "Solution recorded. Consumer notification updated."
-  );
-
-
-  showPage(
-    "dashboard"
-  );
-
-}
-
-
-/* =====================================================
-   VALID COMPLAINT FILTER
-   ===================================================== */
 
 
 function filterComplaints(status) {
 
-  if (status !== "Valid")
+  if (status !== "Valid") return;
+
+  renderRows(complaints.filter(c => c.status !== "Rejected"));
+
+  showToast("Showing valid complaints.");
+
+}
+
+
+/* =====================================================
+   GIVE SOLUTION
+   ===================================================== */
+
+
+function renderSolutionDetails(id) {
+
+  const c = complaints.find(item => item.id === id);
+
+  const box = $("solutionDetails");
+
+  if (!c) {
+
+    box.innerHTML = "";
+
     return;
 
-
-  const valid =
-    complaints.filter(
-      complaint =>
-        complaint.status !== "Rejected"
-    );
+  }
 
 
-  $("complaintsTable")
-    .innerHTML =
+  const image = safeUrl(c.imageUrl);
 
-      valid.map(
-        complaint => `
-
-          <tr>
-
-            <td>
-              ${escapeHTML(
-                complaint.id
-              )}
-            </td>
-
-            <td>
-              ${escapeHTML(
-                complaint.name
-              )}
-            </td>
-
-            <td>
-              ${escapeHTML(
-                complaint.issue
-              )}
-            </td>
-
-            <td>
-
-              <span class="status ${
-                escapeHTML(
-                  complaint.status
-                )
-              }">
-
-                ${escapeHTML(
-                  complaint.status
-                )}
-
-              </span>
-
-            </td>
-
-            <td>
-
-              <button
-                class="secondary"
-                onclick="openComplaint('${escapeJS(
-                  complaint.id
-                )}')">
-
-                View
-
-              </button>
-
-            </td>
-
-          </tr>
-
-        `
-      ).join("");
+  const file = safeUrl(c.documentUrl);
 
 
-  showToast(
-    "Showing valid complaints."
-  );
+  box.innerHTML = `
+
+    <b>Mobile:</b> ${escapeHTML(c.mobile)}<br>
+
+    <b>Location:</b> ${escapeHTML(c.location || "—")}<br>
+
+    <b>Submitted:</b> ${escapeHTML(c.created)}<br><br>
+
+    <b>Details:</b> ${escapeHTML(c.details)}
+
+    ${image
+      ? `<br><br><a href="${escapeHTML(image)}" target="_blank" rel="noopener">
+           <img class="evidence-img" src="${escapeHTML(image)}"
+                alt="Image uploaded by the consumer"></a>`
+      : ""}
+
+    ${file
+      ? `<br><br>📎 <a href="${escapeHTML(file)}" target="_blank"
+           rel="noopener">${escapeHTML(c.documentName)}</a>`
+      : ""}
+
+  `;
+
+
+  $("solutionText").value = c.response || "";
+
+  $("solutionStatus").value =
+    c.status === "Resolved" || c.status === "Rejected"
+      ? c.status
+      : "Under Review";
+
+}
+
+
+function openComplaint(id) {
+
+  const complaint = complaints.find(item => item.id === id);
+
+  if (!complaint) return;
+
+  currentComplaint = complaint;
+
+  showPage("give-solution");
+
+}
+
+
+function populateSolutionSelect() {
+
+  if (!complaints.length) {
+
+    $("solutionComplaint").innerHTML =
+      `<option value="">No complaints</option>`;
+
+    $("solutionDetails").innerHTML = "";
+
+    return;
+
+  }
+
+
+  $("solutionComplaint").innerHTML = complaints.map(c => `
+
+    <option value="${escapeHTML(c.id)}">
+      ${escapeHTML(c.id)} — ${escapeHTML(c.name)} — ${escapeHTML(c.issue)}
+    </option>
+
+  `).join("");
+
+
+  if (currentComplaint) {
+
+    $("solutionComplaint").value = currentComplaint.id;
+
+  }
+
+
+  renderSolutionDetails($("solutionComplaint").value);
+
+}
+
+
+$("solutionComplaint").addEventListener(
+  "change",
+  function () {
+
+    currentComplaint =
+      complaints.find(item => item.id === this.value) || null;
+
+    renderSolutionDetails(this.value);
+
+  }
+);
+
+
+async function sendSolution() {
+
+  const id = $("solutionComplaint").value;
+
+  const response = $("solutionText").value.trim();
+
+
+  if (!complaints.some(item => item.id === id)) {
+
+    showToast("No complaint selected.");
+
+    return;
+
+  }
+
+
+  if (!response) {
+
+    showToast("Write a response first.");
+
+    return;
+
+  }
+
+
+  try {
+
+    await fb.respond(id, $("solutionStatus").value, response);
+
+    showToast("Solution saved. An SMS notification will be attempted.");
+
+    showPage("dashboard");
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    showToast("Could not save the solution. Check your login.");
+
+  }
 
 }
 
