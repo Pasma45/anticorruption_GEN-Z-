@@ -114,6 +114,9 @@ function otpFailureMessage(error) {
   const code = error && typeof error.code === "string"
     ? error.code
     : "";
+  const detail = error && typeof error.message === "string"
+    ? error.message.replace(/\s+/g, " ").slice(0, 180)
+    : "";
 
   switch (code) {
 
@@ -145,8 +148,8 @@ function otpFailureMessage(error) {
 
     default:
       return code
-        ? `OTP request failed (${code}). Please try again or contact the site administrator.`
-        : "OTP request failed. Please try again or contact the site administrator.";
+        ? `OTP request failed (${code})${detail ? `: ${detail}` : "."}`
+        : `OTP request failed${detail ? `: ${detail}` : ". Check your connection and contact the site administrator if it continues."}`;
 
   }
 
