@@ -12,8 +12,7 @@ service firebase.storage {
           || (
             request.auth.token.email_verified == true
             && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
-            && firestore.get(/databases/(default)/documents/handlerAccounts/$(request.auth.uid)).data.active == true
-            && firestore.get(/databases/(default)/documents/handlerAccounts/$(request.auth.uid)).data.email == request.auth.token.email
+            && firestore.get(/databases/(default)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email
           )
         );
     }

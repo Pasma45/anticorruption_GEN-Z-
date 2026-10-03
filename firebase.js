@@ -93,9 +93,8 @@ if (!isFirebaseConfigured()) {
 
     if (provider) {
       if (!user.email || !user.emailVerified) return false;
-      const snapshot = await getDoc(doc(db, "handlerAccounts", user.uid));
+      const snapshot = await getDoc(doc(db, "handlerAccounts", user.email));
       return snapshot.exists()
-        && snapshot.data().active === true
         && snapshot.data().email === user.email;
     }
 

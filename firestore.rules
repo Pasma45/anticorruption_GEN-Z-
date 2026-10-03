@@ -23,9 +23,9 @@ service cloud.firestore {
           signedIn()
           && request.auth.token.email_verified == true
           && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
-          && exists(/databases/$(database)/documents/handlerAccounts/$(request.auth.uid))
-          && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.uid)).data.active == true
-          && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.uid)).data.email == request.auth.token.email
+          && request.auth.token.email is string
+          && exists(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email))
+          && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email
         );
     }
 
@@ -34,8 +34,11 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
-    match /handlerAccounts/{uid} {
-      allow get: if signedIn() && uid == request.auth.uid;
+    match /handlerAccounts/{email} {
+      allow get: if signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
+        && request.auth.token.email == email;
       allow list, create, update, delete: if false;
     }
 
