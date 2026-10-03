@@ -339,6 +339,7 @@ $("complaintForm").addEventListener(
 
       $("submittedId").textContent =
         "Query ID: " + complaint.id;
+      $("submittedId").dataset.queryId = complaint.id;
 
       const evidenceNotice = $("submittedEvidenceNotice");
       evidenceNotice.hidden = !result.evidenceErrors;
@@ -394,6 +395,17 @@ function trackFromHome() {
 
   showPage("track");
 
+
+  trackComplaint();
+
+}
+
+
+function trackSubmittedComplaint() {
+
+  $("trackQueryId").value = $("submittedId").dataset.queryId || "";
+
+  showPage("track");
 
   trackComplaint();
 
