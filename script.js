@@ -423,7 +423,7 @@ function renderTrack(list) {
 
     $("trackResult").innerHTML = `
       <div class="panel">
-        <p>No complaint found. Check your mobile number and Query ID.</p>
+        <p>No complaint found for this account and filter.</p>
       </div>`;
 
     return;
@@ -965,13 +965,13 @@ const actionContent = {
       [
         "3",
         "Submit the complaint",
-        "Use the Consumer Portal. Enter a valid mobile number and describe the issue clearly. A unique Query ID is generated after submission."
+        "Use the Consumer Portal and sign in with Google or Apple. Add a contact number and describe the issue clearly. A unique Query ID is generated after submission."
       ],
 
       [
         "4",
         "Track the case",
-        "Use your mobile number or Query ID on Track Complaint. The status can move through review and resolution stages."
+        "Sign in with the same Google or Apple account on Track Complaint. You can filter by contact number or Query ID."
       ],
 
       [
@@ -1019,13 +1019,13 @@ const actionContent = {
       [
         "3",
         "शिकायत जमा करें",
-        "Consumer Portal का उपयोग करें। सही मोबाइल नंबर दें और समस्या स्पष्ट रूप से लिखें। जमा करने के बाद एक अलग Query ID बनती है।"
+        "Consumer Portal का उपयोग करें और Google या Apple से साइन इन करें। संपर्क नंबर दें और समस्या स्पष्ट रूप से लिखें। जमा करने के बाद एक अलग Query ID बनती है।"
       ],
 
       [
         "4",
         "शिकायत ट्रैक करें",
-        "Track Complaint में मोबाइल नंबर या Query ID डालें। स्थिति समीक्षा और समाधान के चरणों में बदल सकती है।"
+        "Track Complaint में उसी Google या Apple खाते से साइन इन करें। आप संपर्क नंबर या Query ID से फ़िल्टर कर सकते हैं।"
       ],
 
       [
@@ -1073,13 +1073,13 @@ const actionContent = {
       [
         "৩",
         "অভিযোগ জমা দিন",
-        "Consumer Portal ব্যবহার করুন। সঠিক মোবাইল নম্বর দিন এবং সমস্যাটি পরিষ্কারভাবে লিখুন। জমা দেওয়ার পর একটি আলাদা Query ID তৈরি হবে।"
+        "Consumer Portal ব্যবহার করুন এবং Google বা Apple দিয়ে সাইন ইন করুন। যোগাযোগের নম্বর দিন এবং সমস্যাটি পরিষ্কারভাবে লিখুন। জমা দেওয়ার পর একটি আলাদা Query ID তৈরি হবে।"
       ],
 
       [
         "৪",
         "অভিযোগ ট্র্যাক করুন",
-        "Track Complaint-এ মোবাইল নম্বর বা Query ID দিন। অবস্থা পর্যালোচনা ও সমাধানের ধাপে পরিবর্তিত হতে পারে।"
+        "Track Complaint-এ একই Google বা Apple অ্যাকাউন্ট দিয়ে সাইন ইন করুন। যোগাযোগের নম্বর বা Query ID দিয়ে ফিল্টার করতে পারেন।"
       ],
 
       [
