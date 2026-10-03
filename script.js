@@ -156,7 +156,7 @@ function otpFailureMessage(error) {
 }
 
 
-async function handlerProviderSignIn(provider) {
+window.handlerProviderSignIn = async function handlerProviderSignIn(provider) {
 
   if (!window.fb) {
 
@@ -164,7 +164,7 @@ async function handlerProviderSignIn(provider) {
 
     return;
 
-  }
+  };
 
   try {
 
