@@ -52,19 +52,17 @@ service cloud.firestore {
     match /complaints/{complaintId} {
       allow create: if consumer()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.mobile is string
-        && request.resource.data.mobile.matches('^[0-9]{10}$')
         && request.resource.data.id == complaintId
         && request.resource.data.status == 'Pending'
         && request.resource.data.response == ''
         && request.resource.data.keys().hasOnly([
-          'id', 'mobile', 'name', 'location', 'issue', 'details',
+          'id', 'name', 'location', 'issue', 'details',
           'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
           'documentUrl', 'documentPath', 'documentName', 'created',
           'updated', 'createdAt'
         ])
         && request.resource.data.keys().hasAll([
-          'id', 'mobile', 'name', 'location', 'issue', 'details',
+          'id', 'name', 'location', 'issue', 'details',
           'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
           'documentUrl', 'documentPath', 'documentName', 'created',
           'updated', 'createdAt'

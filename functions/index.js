@@ -22,9 +22,7 @@ exports.notifyConsumerOfResponse = onDocumentUpdated(
     if (!after.response || after.response === before.response) return;
 
     const mobile = String(after.mobile || "");
-    if (!/^\d{10}$/.test(mobile)) {
-      throw new Error(`Complaint ${event.params.complaintId} has an invalid mobile number.`);
-    }
+    if (!/^\d{10}$/.test(mobile)) return;
 
     const db = getFirestore();
     const notificationRef = db.collection("smsNotifications").doc(event.id);

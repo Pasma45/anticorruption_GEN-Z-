@@ -42,14 +42,6 @@ const firebaseConfig = {
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 let auth = null;
 
-function normalizeMobile(value) {
-  const mobile = String(value || "").replace(/\D/g, "");
-  if (!/^\d{10}$/.test(mobile)) {
-    throw new Error("Enter a valid 10-digit mobile number.");
-  }
-  return mobile;
-}
-
 function isConsumerUser(user) {
   return Boolean(
     user
@@ -150,7 +142,6 @@ if (!isFirebaseConfigured()) {
 
   async function createComplaint(complaint, imageFile, docFile) {
     const user = requireConsumerUser();
-    const mobile = normalizeMobile(complaint.mobile);
 
     const uploaded = [];
     try {
@@ -162,7 +153,6 @@ if (!isFirebaseConfigured()) {
       const now = new Date().toLocaleString();
       await setDoc(doc(db, "complaints", complaint.id), {
         ...complaint,
-        mobile,
         ownerUid: user.uid,
         status: "Pending",
         response: "",

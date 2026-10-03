@@ -2,19 +2,15 @@
 
 The website is a static HTML/CSS/JavaScript app. Firebase provides Google and
 Apple authentication, complaint history (Cloud Firestore), and private
-evidence uploads (Cloud Storage). A Firebase Cloud Function uses Twilio to
-text the handler's response to the complainant.
-
-The app currently accepts 10-digit Indian mobile contact numbers. It does not
-verify them or send Firebase Authentication OTP messages.
+evidence uploads (Cloud Storage). New complaints do not collect or store phone
+numbers.
 
 ## Current project status
 
 - Firebase project `anti-corruption-portal-genz` is connected in `firebase.js`,
   and its web app is registered.
-- Complaint filing and tracking use verified Google or Apple accounts; a
-  complainant's mobile number is collected only as contact information and is
-  not verified by SMS.
+- Complaint filing and tracking use verified Google or Apple accounts.
+  Complaint forms do not ask for a phone number.
 - Handler login uses verified Google or Apple accounts only. Google is
   enabled; Apple still requires Apple Developer credentials and must be
   enabled in Firebase Authentication.
@@ -100,9 +96,10 @@ verify them or send Firebase Authentication OTP messages.
    firebase deploy --only functions
    ```
 
-The function sends a text only when a complaint's response is added or changed.
-It includes the Query ID, status, and response. Check **Firebase → Functions**
-logs and Twilio message logs if a text is not delivered.
+The function can send texts only for older complaint records that already
+contain a valid phone number. New complaints have no phone number, so no SMS
+is sent. Check **Firebase → Functions** logs and Twilio message logs for
+legacy notifications.
 
 ## 3. Run and publish the site
 
@@ -121,8 +118,8 @@ publication root. Never use Firebase test/open rules on a live site.
 ## Data and access
 
 - Authenticated complainants can create complaints using Google or Apple and
-  read only records owned by their Firebase account. The mobile number is not
-  identity-verified.
+  read only records owned by their Firebase account. New complaint records do
+  not contain a phone number.
 - Only Google/Apple accounts with verified emails explicitly listed in
   `handlerAccounts/{email}` can see the handler dashboard, all complaints, and
   uploaded evidence or post a response. Consumer Google/Apple accounts can

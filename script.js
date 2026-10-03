@@ -267,19 +267,6 @@ $("complaintForm").addEventListener(
 
     const form = this;
 
-    const mobile = $("mobile").value.trim();
-
-
-    if (!/^\d{10}$/.test(mobile)) {
-
-      showToast("Enter a valid 10-digit mobile number.");
-
-      $("mobile").focus();
-
-      return;
-
-    }
-
     if (!window.fb || !fb.isConsumer()) {
 
       showToast("Sign in with Google or Apple before submitting your complaint.");
@@ -330,8 +317,6 @@ $("complaintForm").addEventListener(
       const complaint = {
 
         id: generateQueryId(),
-
-        mobile: mobile,
 
         name: $("name").value.trim() || "Anonymous",
 
@@ -387,18 +372,7 @@ $("complaintForm").addEventListener(
 
 function trackFromHome() {
 
-  const mobile =
-    $("homeTrackMobile")
-      .value
-      .trim();
-
-
-  $("trackMobile").value =
-    mobile;
-
-
-  $("trackQueryId").value =
-    "";
+  $("trackQueryId").value = $("homeTrackQueryId").value.trim();
 
 
   showPage("track");
@@ -471,10 +445,6 @@ function renderTrack(list) {
       </div>
 
       <p class="muted">
-        📱 Contact number: ${maskMobile(c.mobile)}
-      </p>
-
-      <p class="muted">
         <b>Last updated:</b> ${escapeHTML(c.updated)}
       </p>
 
@@ -487,19 +457,7 @@ function renderTrack(list) {
 
 async function trackComplaint() {
 
-  const mobile = $("trackMobile").value.trim();
-
   const queryId = $("trackQueryId").value.trim().toUpperCase();
-
-
-  if (mobile && !/^\d{10}$/.test(mobile)) {
-
-    showToast("Enter a valid 10-digit mobile number.");
-
-    return;
-
-  }
-
 
   if (!window.fb) {
 
@@ -526,17 +484,11 @@ async function trackComplaint() {
 
       const complaint = await fb.getComplaint(queryId);
 
-      list = complaint && (!mobile || complaint.mobile === mobile)
-        ? [complaint]
-        : [];
+      list = complaint ? [complaint] : [];
 
     } else {
 
       list = await fb.listByOwner();
-
-      if (mobile) {
-        list = list.filter(complaint => complaint.mobile === mobile);
-      }
 
     }
 
@@ -551,22 +503,6 @@ async function trackComplaint() {
     showToast("Could not access that complaint. Check the Query ID and sign in with the account used to submit it.");
 
   }
-
-}
-
-
-/* =====================================================
-   MASK MOBILE
-   ===================================================== */
-
-
-function maskMobile(mobile) {
-
-  return (
-    mobile.slice(0, 2) +
-    "******" +
-    mobile.slice(-2)
-  );
 
 }
 
@@ -709,8 +645,7 @@ function renderRows(list) {
 
       <td>${escapeHTML(c.id)}</td>
 
-      <td>${escapeHTML(c.name)}<br>
-          <small>${escapeHTML(c.mobile)}</small></td>
+      <td>${escapeHTML(c.name)}</td>
 
       <td>${escapeHTML(c.issue)}</td>
 
@@ -794,8 +729,6 @@ function renderSolutionDetails(id) {
 
 
   box.innerHTML = `
-
-    <b>Mobile:</b> ${escapeHTML(c.mobile)}<br>
 
     <b>Location:</b> ${escapeHTML(c.location || "—")}<br>
 
@@ -917,7 +850,7 @@ async function sendSolution() {
 
     await fb.respond(id, $("solutionStatus").value, response);
 
-    showToast("Solution saved. An SMS notification will be attempted.");
+    showToast("Solution saved. The complaint status has been updated.");
 
     showPage("dashboard");
 
@@ -965,19 +898,19 @@ const actionContent = {
       [
         "3",
         "Submit the complaint",
-        "Use the Consumer Portal and sign in with Google or Apple. Add a contact number and describe the issue clearly. A unique Query ID is generated after submission."
+        "Use the Consumer Portal and sign in with Google or Apple. Describe the issue clearly. A unique Query ID is generated after submission."
       ],
 
       [
         "4",
         "Track the case",
-        "Sign in with the same Google or Apple account on Track Complaint. You can filter by contact number or Query ID."
+        "Sign in with the same Google or Apple account on Track Complaint. Enter the Query ID or view your complaint list."
       ],
 
       [
         "5",
         "Read the officer response",
-        "When a service handler posts a response, it appears in the complaint record. This demo also shows a mobile/SMS notification preview."
+        "When a service handler posts a response, it appears in the complaint record."
       ],
 
       [
@@ -1019,19 +952,19 @@ const actionContent = {
       [
         "3",
         "शिकायत जमा करें",
-        "Consumer Portal का उपयोग करें और Google या Apple से साइन इन करें। संपर्क नंबर दें और समस्या स्पष्ट रूप से लिखें। जमा करने के बाद एक अलग Query ID बनती है।"
+        "Consumer Portal का उपयोग करें और Google या Apple से साइन इन करें। समस्या स्पष्ट रूप से लिखें। जमा करने के बाद एक अलग Query ID बनती है।"
       ],
 
       [
         "4",
         "शिकायत ट्रैक करें",
-        "Track Complaint में उसी Google या Apple खाते से साइन इन करें। आप संपर्क नंबर या Query ID से फ़िल्टर कर सकते हैं।"
+        "Track Complaint में उसी Google या Apple खाते से साइन इन करें। Query ID डालें या अपनी शिकायतों की सूची देखें।"
       ],
 
       [
         "5",
         "अधिकारी का उत्तर देखें",
-        "Service Handler द्वारा उत्तर देने पर वह शिकायत रिकॉर्ड में दिखाई देता है। इस डेमो में मोबाइल/SMS notification preview भी दिखता है।"
+        "Service Handler द्वारा उत्तर देने पर वह शिकायत रिकॉर्ड में दिखाई देता है।"
       ],
 
       [
@@ -1073,19 +1006,19 @@ const actionContent = {
       [
         "৩",
         "অভিযোগ জমা দিন",
-        "Consumer Portal ব্যবহার করুন এবং Google বা Apple দিয়ে সাইন ইন করুন। যোগাযোগের নম্বর দিন এবং সমস্যাটি পরিষ্কারভাবে লিখুন। জমা দেওয়ার পর একটি আলাদা Query ID তৈরি হবে।"
+        "Consumer Portal ব্যবহার করুন এবং Google বা Apple দিয়ে সাইন ইন করুন। সমস্যাটি পরিষ্কারভাবে লিখুন। জমা দেওয়ার পর একটি আলাদা Query ID তৈরি হবে।"
       ],
 
       [
         "৪",
         "অভিযোগ ট্র্যাক করুন",
-        "Track Complaint-এ একই Google বা Apple অ্যাকাউন্ট দিয়ে সাইন ইন করুন। যোগাযোগের নম্বর বা Query ID দিয়ে ফিল্টার করতে পারেন।"
+        "Track Complaint-এ একই Google বা Apple অ্যাকাউন্ট দিয়ে সাইন ইন করুন। Query ID লিখুন বা নিজের অভিযোগের তালিকা দেখুন।"
       ],
 
       [
         "৫",
         "কর্মকর্তার উত্তর দেখুন",
-        "Service Handler উত্তর দিলে তা অভিযোগের রেকর্ডে দেখা যাবে। এই ডেমোতে মোবাইল/SMS notification preview-ও দেখা যায়।"
+        "Service Handler উত্তর দিলে তা অভিযোগের রেকর্ডে দেখা যাবে।"
       ],
 
       [
