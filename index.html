@@ -326,6 +326,23 @@
 
       </label>
 
+      <div class="location-fields full">
+        <label>
+          State / Union Territory
+          <input id="locationState" maxlength="100" autocomplete="address-level1">
+        </label>
+        <label>
+          Village / Town
+          <input id="locationVillage" maxlength="200" autocomplete="address-level2">
+        </label>
+        <button id="useLocationBtn" type="button" class="secondary">
+          Use my current location
+        </button>
+        <small id="locationStatus" class="muted" aria-live="polite">
+          Location is optional. GPS is used only after you press the button; approximate address lookup is provided by OpenStreetMap.
+        </small>
+      </div>
+
 
       <label>
 
@@ -366,10 +383,8 @@
       </label>
 
 
-      <label class="full">
-
-        Complaint Details <span>*</span>
-
+      <div class="full complaint-details-field">
+        <label for="details">Complaint Details <span>*</span></label>
         <textarea
           id="details"
           required
@@ -381,34 +396,57 @@
           0/1000
         </small>
 
-      </label>
+        <div class="voice-controls">
+          <span id="complaintSpeechLanguageLabel">Voice language</span>
+          <select id="complaintSpeechLanguage" class="speech-language" aria-labelledby="complaintSpeechLanguageLabel">
+            <option value="en-IN">English</option>
+            <option value="hi-IN">हिन्दी</option>
+            <option value="bn-IN">বাংলা</option>
+            <option value="ta-IN">தமிழ்</option>
+            <option value="te-IN">తెలుగు</option>
+            <option value="mr-IN">मराठी</option>
+            <option value="gu-IN">ગુજરાતી</option>
+            <option value="kn-IN">ಕನ್ನಡ</option>
+            <option value="ml-IN">മലയാളം</option>
+            <option value="pa-IN">ਪੰਜਾਬੀ</option>
+            <option value="or-IN">ଓଡ଼ିଆ</option>
+            <option value="as-IN">অসমীয়া</option>
+            <option value="ur-IN">اردو</option>
+          </select>
+          <button id="dictateComplaintBtn" type="button" class="secondary">🎙 Speak complaint</button>
+          <button type="button" class="secondary" onclick="readAloud($('details').value, $('complaintSpeechLanguage').value)">🔊 Read aloud</button>
+          <small id="complaintVoiceStatus" aria-live="polite"></small>
+          <small class="muted">Voice typing and read-aloud use the selected language; text is not translated. Your browser may process microphone audio for transcription, so review the text before submitting.</small>
+        </div>
+
+      </div>
 
 
-      <label>
+      <div class="media-field">
+        <label for="image">Attach Photo (camera supported on mobile)</label>
+        <input id="image" type="file" accept="image/*" capture="environment">
+        <button id="removeImageBtn" type="button" class="secondary" hidden>Remove photo</button>
+        <div id="imagePreview" class="media-preview"></div>
+      </div>
 
-        Attach Image
+      <div class="media-field">
+        <label for="document">Attach Document</label>
+        <input id="document" type="file" accept=".pdf,.doc,.docx,.jpg,.png">
+      </div>
 
-        <input
-          id="image"
-          type="file"
-          accept="image/*"
-        >
+      <div class="media-field">
+        <label for="video">Attach Video (maximum 5 MB)</label>
+        <input id="video" type="file" accept="video/*" capture="environment">
+        <button id="removeVideoBtn" type="button" class="secondary" hidden>Remove video</button>
+        <div id="videoPreview" class="media-preview"></div>
+      </div>
 
-      </label>
+    </div>
 
-
-      <label>
-
-        Attach Document
-
-        <input
-          id="document"
-          type="file"
-          accept=".pdf,.doc,.docx,.jpg,.png"
-        >
-
-      </label>
-
+    <div class="voice-controls">
+      <button id="readComplaintBtn" type="button" class="secondary">
+        🔊 Read complaint before submitting
+      </button>
     </div>
 
     <div class="notice">
@@ -418,6 +456,7 @@
 
     </div>
 
+    <p id="submissionProgress" class="submission-progress" role="status" aria-live="polite" hidden></p>
 
     <button
       id="submitComplaintBtn"
@@ -521,6 +560,19 @@
       </h1>
 
       <p>Sign in with the same Google or Apple email used to submit your complaint. Leave the Query ID blank to recover your complaint history.</p>
+      <button type="button" class="secondary" onclick="readAloud($('trackResult').innerText, $('trackSpeechLanguage').value)">🔊 Read complaint and response aloud</button>
+      <label class="voice-controls">
+        Read-aloud language
+        <select id="trackSpeechLanguage" class="speech-language">
+          <option value="en-IN">English</option><option value="hi-IN">हिन्दी</option>
+          <option value="bn-IN">বাংলা</option><option value="ta-IN">தமிழ்</option>
+          <option value="te-IN">తెలుగు</option><option value="mr-IN">मराठी</option>
+          <option value="gu-IN">ગુજરાતી</option><option value="kn-IN">ಕನ್ನಡ</option>
+          <option value="ml-IN">മലയാളം</option><option value="pa-IN">ਪੰਜਾਬੀ</option>
+          <option value="or-IN">ଓଡ଼ିଆ</option><option value="as-IN">অসমীয়া</option>
+          <option value="ur-IN">اردو</option>
+        </select>
+      </label>
 
     </div>
 
@@ -574,14 +626,14 @@
 
       <input
         id="trackQueryId"
-        placeholder="Query ID (optional)"
+        placeholder="Query ID or search terms (optional)"
       >
 
       <button
         class="primary"
         onclick="trackComplaint()">
 
-        Find by ID or Show My Complaints
+        Search My Complaints
 
       </button>
 
@@ -746,6 +798,11 @@
         Recent Complaints
       </h2>
 
+      <div class="inline-form handler-search">
+        <input id="handlerSearch" type="search" placeholder="Search by Query ID, name, issue or location">
+        <button type="button" class="secondary" onclick="showPage('complaint-history')">Complaint History</button>
+      </div>
+
       <div class="table-wrap">
 
         <table>
@@ -823,6 +880,30 @@
 
 </section>
 
+<!-- ================= COMPLAINT HISTORY ================= -->
+
+<section id="complaint-history" class="page">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">SERVICE HANDLER</p>
+      <h1>Complaint History</h1>
+      <p>Resolved and rejected complaints. Search across all cases by Query ID, name, issue, or location.</p>
+    </div>
+    <button class="secondary" onclick="showPage('dashboard')">← Dashboard</button>
+  </div>
+  <div class="panel">
+    <label>
+      Search complaints
+      <input id="historySearch" type="search" placeholder="Query ID, name, issue or location">
+    </label>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Complainant</th><th>Issue</th><th>Status</th><th>Evidence</th><th>Action</th></tr></thead>
+        <tbody id="historyTable"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
 
 <!-- ================= SOLUTION ================= -->
 
@@ -873,6 +954,12 @@
 
     <div id="solutionDetails" class="notice"></div>
 
+    <div class="solution-templates" aria-label="Response suggestions">
+      <button type="button" class="secondary" onclick="useSolutionTemplate('Your complaint has been received and is under review.')">Under review</button>
+      <button type="button" class="secondary" onclick="useSolutionTemplate('Please provide additional information so we can continue reviewing your complaint.')">Request information</button>
+      <button type="button" class="secondary" onclick="useSolutionTemplate('Your complaint has been forwarded to the responsible department for action.')">Forwarded</button>
+      <button type="button" class="secondary" onclick="useSolutionTemplate('The review is complete. Please see the action taken described below.')">Review complete</button>
+    </div>
 
     <br>
 
@@ -889,6 +976,29 @@
 
     </label>
 
+    <div class="voice-controls">
+      <label for="solutionSpeechLanguage">Voice language</label>
+      <select id="solutionSpeechLanguage" class="speech-language">
+        <option value="en-IN">English</option><option value="hi-IN">हिन्दी</option>
+        <option value="bn-IN">বাংলা</option><option value="ta-IN">தமிழ்</option>
+        <option value="te-IN">తెలుగు</option><option value="mr-IN">मराठी</option>
+        <option value="gu-IN">ગુજરાતી</option><option value="kn-IN">ಕನ್ನಡ</option>
+        <option value="ml-IN">മലയാളം</option><option value="pa-IN">ਪੰਜਾਬੀ</option>
+        <option value="or-IN">ଓଡ଼ିଆ</option><option value="as-IN">অসমীয়া</option>
+        <option value="ur-IN">اردو</option>
+      </select>
+      <button id="dictateSolutionBtn" type="button" class="secondary">🎙 Dictate response</button>
+      <button type="button" class="secondary" onclick="readAloud($('solutionText').value, $('solutionSpeechLanguage').value)">🔊 Read response</button>
+      <small id="solutionVoiceStatus" aria-live="polite"></small>
+    </div>
+
+    <div class="voice-controls">
+      <button id="recordSolutionAudioBtn" type="button" class="secondary">🎙 Record voice response</button>
+      <button id="stopSolutionAudioBtn" type="button" class="secondary" disabled>Stop recording</button>
+      <button id="removeSolutionAudioBtn" type="button" class="secondary" hidden>Remove recording</button>
+      <small id="solutionAudioStatus" aria-live="polite">Optional voice recording, up to 5 MB. It is attached only when you send the response.</small>
+      <audio id="solutionAudioPreview" controls preload="none" hidden></audio>
+    </div>
 
     <br>
 
@@ -900,11 +1010,31 @@
       <select id="solutionStatus">
 
         <option>
-          Resolved
+          Pending
         </option>
 
         <option>
           Under Review
+        </option>
+
+        <option>
+          Investigation Started
+        </option>
+
+        <option>
+          Forwarded to Department
+        </option>
+
+        <option>
+          Information Requested
+        </option>
+
+        <option>
+          Escalated
+        </option>
+
+        <option>
+          Resolved
         </option>
 
         <option>
@@ -915,6 +1045,7 @@
 
     </label>
 
+    <p class="muted">When you submit the response, a notification will be emailed to the consumer's verified sign-in email if email delivery is configured.</p>
 
     <button
       class="primary wide"

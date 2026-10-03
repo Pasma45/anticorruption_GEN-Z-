@@ -24,6 +24,11 @@ numbers.
   saved to Firestore before evidence uploads are attempted, so an unavailable
   Storage bucket will not prevent a complaint from reaching the handler inbox.
   The confirmation page warns if an attachment could not be uploaded.
+- GPS autofill is requested only when the complainant clicks the location
+  button. Device coordinates are sent to OpenStreetMap Nominatim to look up an
+  approximate village and state; raw coordinates are not saved in the complaint.
+- Voice typing and read-aloud use browser speech support and the selected
+  Indian language. These controls do not automatically translate typed text.
 - The Twilio SMS function has not been deployed. The local website changes
   are published to GitHub Pages at
   `https://pasma45.github.io/anticorruption_GEN-Z-/`.
@@ -77,7 +82,37 @@ numbers.
    firebase deploy --only firestore:rules
    ```
 
-## 2. Configure actual response SMS
+## 2. Enable response email notifications
+
+When a handler changes the response, the `notifyConsumerOfResponseEmail`
+function emails the verified Google/Apple account associated with the
+complaint. Email is sent server-side; no mail credentials are exposed to the
+website. Firebase Functions deployment requires the Blaze plan. Choose an
+SMTP provider and configure its credentials as Firebase secrets from the
+project directory (do not paste credentials into source files or chat):
+
+```powershell
+firebase functions:secrets:set SMTP_HOST
+firebase functions:secrets:set SMTP_PORT
+firebase functions:secrets:set SMTP_USER
+firebase functions:secrets:set SMTP_PASSWORD
+firebase functions:secrets:set SMTP_FROM
+```
+
+`SMTP_FROM` must be an address the SMTP provider permits you to send from.
+After the secrets are configured, deploy only the email function:
+
+```powershell
+firebase deploy --only functions:notifyConsumerOfResponseEmail
+```
+
+Check **Firebase → Functions → Logs** and the SMTP provider's delivery log if
+an email does not arrive. The function records delivery state in the
+server-only `emailNotifications` collection. Until a mail provider is
+configured and the function is deployed, the response remains available in
+the consumer's signed-in complaint tracker, but no email is sent.
+
+## 3. Configure legacy response SMS
 
 1. Create a Twilio account, obtain a sender number that can text the
    complainants' country, and complete any carrier or regulatory registration
@@ -103,7 +138,7 @@ contain a valid phone number. New complaints have no phone number, so no SMS
 is sent. Check **Firebase → Functions** logs and Twilio message logs for
 legacy notifications.
 
-## 3. Run and publish the site
+## 4. Run and publish the site
 
 Serve the project over HTTP while developing (ES modules do not work when the
 HTML file is opened directly):
@@ -128,6 +163,21 @@ publication root. Never use Firebase test/open rules on a live site.
   read only their own complaints.
 - Evidence files are limited to 5 MB. Firestore and Storage rules are in
   `firestore.rules` and `storage.rules`.
+- Photo and video inputs can open the device camera on supported phones.
+  Selected media can be previewed and removed before submitting. Videos,
+  photos, documents, and handler voice recordings are each limited to 5 MB;
+  Cloud Storage must be configured for any evidence upload to succeed.
+- Service handlers can record an optional audio response. The text response is
+  saved independently and remains available if the audio upload fails. The
+  consumer complaint tracker includes playback controls when an audio response
+  has been uploaded.
+- GPS autofill requires location permission and an internet connection. State
+  and village/town values are editable and should be checked for accuracy.
+- Complaint and handler response voice typing uses the browser's speech
+  recognition. Read-aloud uses the browser's available speech voices; language
+  availability depends on the device and browser.
+- When the handler changes a complaint response, the server-side email
+  notification requires the SMTP secrets and Firebase Functions setup above.
 - A submitted complaint receives a Query ID and is stored in Firestore before
   optional evidence uploads. If evidence upload fails, the complaint remains
   available to the handler and the complainant can still track it.

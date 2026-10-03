@@ -22,12 +22,15 @@ service cloud.firestore {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       let imagePath = request.resource.data.imagePath;
       let documentPath = request.resource.data.documentPath;
+      let videoPath = request.resource.data.videoPath;
       return consumer()
         && resource.data.ownerUid == request.auth.uid
-        && changed.hasAny(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName'])
-        && changed.hasOnly(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName'])
+        && changed.hasAny(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName', 'videoUrl', 'videoPath', 'videoName'])
+        && changed.hasOnly(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName', 'videoUrl', 'videoPath', 'videoName'])
         && request.resource.data.status == resource.data.status
         && request.resource.data.response == resource.data.response
+        && request.resource.data.responseAudioUrl == resource.data.responseAudioUrl
+        && request.resource.data.responseAudioPath == resource.data.responseAudioPath
         && imagePath is string
         && (
           (imagePath == '' && request.resource.data.imageUrl == '')
@@ -54,8 +57,25 @@ service cloud.firestore {
             && request.resource.data.documentName.size() <= 255
           )
         )
+        && videoPath is string
+        && (
+          (
+            videoPath == ''
+            && request.resource.data.videoUrl == ''
+            && request.resource.data.videoName == ''
+          )
+          || (
+            videoPath.matches('^complaints/[^/]+/[^/]+/video$')
+            && videoPath.split('/')[1] == request.auth.uid
+            && videoPath.split('/')[2] == complaintId
+            && request.resource.data.videoUrl.matches('^https://firebasestorage.googleapis.com/.*$')
+            && request.resource.data.videoName is string
+            && request.resource.data.videoName.size() <= 255
+          )
+        )
         && (resource.data.imagePath == '' || imagePath == resource.data.imagePath)
-        && (resource.data.documentPath == '' || documentPath == resource.data.documentPath);
+        && (resource.data.documentPath == '' || documentPath == resource.data.documentPath)
+        && (resource.data.videoPath == '' || videoPath == resource.data.videoPath);
     }
 
     match /handlers/{mobile} {
@@ -99,13 +119,17 @@ service cloud.firestore {
           'id', 'name', 'location', 'issue', 'details',
           'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
           'documentUrl', 'documentPath', 'documentName', 'created',
-          'updated', 'createdAt'
+          'updated', 'createdAt', 'videoUrl', 'videoPath', 'videoName',
+          'locationState', 'locationVillage', 'responseAudioUrl',
+          'responseAudioPath'
         ])
         && request.resource.data.keys().hasAll([
           'id', 'name', 'location', 'issue', 'details',
           'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
           'documentUrl', 'documentPath', 'documentName', 'created',
-          'updated', 'createdAt'
+          'updated', 'createdAt', 'videoUrl', 'videoPath', 'videoName',
+          'locationState', 'locationVillage', 'responseAudioUrl',
+          'responseAudioPath'
         ])
         && request.resource.data.createdAt == request.time
         && request.resource.data.name is string
@@ -124,6 +148,15 @@ service cloud.firestore {
         && request.resource.data.documentUrl is string
         && request.resource.data.documentPath is string
         && request.resource.data.documentName is string
+        && request.resource.data.videoUrl is string
+        && request.resource.data.videoPath is string
+        && request.resource.data.videoName is string
+        && request.resource.data.responseAudioUrl is string
+        && request.resource.data.responseAudioPath is string
+        && request.resource.data.locationState is string
+        && request.resource.data.locationState.size() <= 100
+        && request.resource.data.locationVillage is string
+        && request.resource.data.locationVillage.size() <= 200
         && request.resource.data.created is string
         && request.resource.data.updated is string;
 
@@ -133,10 +166,35 @@ service cloud.firestore {
       allow update: if (
           handler()
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'response', 'updated'])
-          && request.resource.data.status in ['Pending', 'Under Review', 'Resolved', 'Rejected']
+            .hasOnly([
+              'status', 'response', 'updated',
+              'responseAudioUrl', 'responseAudioPath'
+            ])
+          && request.resource.data.status in [
+            'Pending', 'Under Review', 'Investigation Started',
+            'Forwarded to Department', 'Information Requested',
+            'Escalated', 'Resolved', 'Rejected'
+          ]
           && request.resource.data.response is string
           && request.resource.data.response.size() <= 1000
+          && (
+            (
+              request.resource.data.responseAudioPath == ''
+              && request.resource.data.responseAudioUrl == ''
+            )
+            || (
+              request.resource.data.responseAudioPath.matches(
+                '^complaints/[^/]+/[^/]+/response-audio-[^/]+$'
+              )
+              && request.resource.data.responseAudioPath.split('/')[1]
+                == resource.data.ownerUid
+              && request.resource.data.responseAudioPath.split('/')[2]
+                == complaintId
+              && request.resource.data.responseAudioUrl.matches(
+                '^https://firebasestorage.googleapis.com/.*$'
+              )
+            )
+          )
         )
         || consumerEvidenceUpdate(complaintId);
 
@@ -144,6 +202,10 @@ service cloud.firestore {
     }
 
     match /smsNotifications/{notificationId} {
+      allow read, write: if false;
+    }
+
+    match /emailNotifications/{notificationId} {
       allow read, write: if false;
     }
   }

@@ -19,6 +19,7 @@ let knownIds = null;            // used to announce NEW complaints
 
 const PROTECTED_PAGES = [
   "dashboard",
+  "complaint-history",
   "give-solution",
   "profile"
 ];
@@ -47,6 +48,16 @@ function safeUrl(url) {
 
 function showPage(id) {
 
+  if (activeRecognition) activeRecognition.stop();
+  if (
+    id !== "give-solution"
+    && solutionAudioRecorder
+    && solutionAudioRecorder.state !== "inactive"
+  ) {
+    solutionAudioFinalizing = true;
+    solutionAudioRecorder.stop();
+  }
+
   /* handler pages need a verified handler login */
   if (PROTECTED_PAGES.includes(id) && !handlerLoggedIn) {
 
@@ -70,6 +81,8 @@ function showPage(id) {
 
 
   if (id === "dashboard") renderDashboard();
+
+  if (id === "complaint-history") renderHistory();
 
   if (id === "give-solution") populateSolutionSelect();
 
@@ -240,6 +253,219 @@ $("details").addEventListener(
 );
 
 
+const speechLocaleIds = [
+  "complaintSpeechLanguage",
+  "trackSpeechLanguage",
+  "solutionSpeechLanguage"
+];
+let activeRecognition = null;
+let activeRecognitionButton = null;
+
+for (const id of speechLocaleIds) {
+  const select = $(id);
+  if (select) {
+    select.value = localStorage.getItem("portalSpeechLanguage") || "en-IN";
+    select.addEventListener("change", function () {
+      localStorage.setItem("portalSpeechLanguage", this.value);
+      for (const otherId of speechLocaleIds) {
+        const other = $(otherId);
+        if (other) other.value = this.value;
+      }
+    });
+  }
+}
+
+function activeSpeechLocale() {
+  const select = document.querySelector(".page.active .speech-language");
+  return select ? select.value : "en-IN";
+}
+
+function readAloud(text, language) {
+  if (!("speechSynthesis" in window)) {
+    showToast("Read-aloud is not supported by this browser.");
+    return;
+  }
+  const content = String(text || "").trim();
+  if (!content) {
+    showToast("There is no text to read yet.");
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(content);
+  utterance.lang = language || activeSpeechLocale();
+  window.speechSynthesis.speak(utterance);
+}
+
+function startDictation(textareaId, statusId, language) {
+  const button = textareaId === "details"
+    ? $("dictateComplaintBtn")
+    : $("dictateSolutionBtn");
+  if (activeRecognition) {
+    if (activeRecognitionButton === button) {
+      activeRecognition.stop();
+      return;
+    }
+    activeRecognition.stop();
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast("Voice typing is not supported in this browser. Try Chrome.");
+    return;
+  }
+  const textarea = $(textareaId);
+  const status = $(statusId);
+  const recognition = new SpeechRecognition();
+  recognition.lang = language || activeSpeechLocale();
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  status.textContent = "Listening...";
+  recognition.onresult = event => {
+    const spoken = Array.from(event.results)
+      .slice(event.resultIndex)
+      .map(result => result[0].transcript.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (spoken) {
+      const separator = textarea.value && !/\s$/.test(textarea.value) ? " " : "";
+      const remaining = 1000 - textarea.value.length;
+      textarea.value += (separator + spoken).slice(0, remaining);
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  };
+  recognition.onerror = event => {
+    status.textContent = "Voice typing stopped: " + event.error + ".";
+    console.error("Voice recognition failed.", event.error);
+  };
+  recognition.onend = () => {
+    if (status.textContent === "Listening...") status.textContent = "Voice typing stopped.";
+    if (activeRecognition === recognition) {
+      activeRecognition = null;
+      activeRecognitionButton = null;
+    }
+  };
+  try {
+    activeRecognition = recognition;
+    activeRecognitionButton = button;
+    recognition.start();
+    status.textContent = "Listening... Press the microphone button again to stop.";
+  } catch (error) {
+    activeRecognition = null;
+    activeRecognitionButton = null;
+    console.error("Could not start voice recognition.", error);
+    status.textContent = "Could not start voice typing. Check microphone permission.";
+  }
+}
+
+$("dictateComplaintBtn").addEventListener("click", () =>
+  startDictation("details", "complaintVoiceStatus", $("complaintSpeechLanguage").value)
+);
+$("dictateSolutionBtn").addEventListener("click", () =>
+  startDictation("solutionText", "solutionVoiceStatus", $("solutionSpeechLanguage").value)
+);
+$("readComplaintBtn").addEventListener("click", () =>
+  readAloud(
+    [$("issue").value, $("details").value].filter(Boolean).join(". "),
+    $("complaintSpeechLanguage").value
+  )
+);
+
+
+async function fillCurrentLocation() {
+  const button = $("useLocationBtn");
+  const status = $("locationStatus");
+  if (!navigator.geolocation) {
+    status.textContent = "This browser does not support location access.";
+    return;
+  }
+  button.disabled = true;
+  status.textContent = "Waiting for location permission...";
+  try {
+    const position = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      })
+    );
+    status.textContent = "Looking up the approximate village and state...";
+    const { latitude, longitude } = position.coords;
+    const response = await fetch(
+      "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat="
+      + encodeURIComponent(latitude) + "&lon=" + encodeURIComponent(longitude),
+      { headers: { Accept: "application/json" } }
+    );
+    if (!response.ok) throw new Error("Address lookup returned HTTP " + response.status);
+    const result = await response.json();
+    const address = result.address || {};
+    const village = address.village || address.hamlet || address.town
+      || address.city || address.suburb || address.county || "";
+    if (!village && !address.state) {
+      throw new Error("No village or state was found near this location.");
+    }
+    if (village) $("locationVillage").value = village;
+    if (address.state) $("locationState").value = address.state;
+    const area = [address.county, address.state].filter(Boolean).join(", ");
+    if (area) $("location").value = area;
+    status.textContent = "Location filled from an approximate GPS lookup. Please check and correct it if needed.";
+  } catch (error) {
+    console.error("Could not fill the complaint location.", error);
+    status.textContent = error.code === 1
+      ? "Location permission was denied. You can enter the area, village and state manually."
+      : error.message || "Location lookup failed. You can enter the location manually.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("useLocationBtn").addEventListener("click", fillCurrentLocation);
+
+
+const previewUrls = new Map();
+
+function updateMediaPreview(inputId, previewId, removeId, type) {
+  const input = $(inputId);
+  const preview = $(previewId);
+  const remove = $(removeId);
+  const oldUrl = previewUrls.get(inputId);
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+  previewUrls.delete(inputId);
+  preview.replaceChildren();
+  const file = input.files[0];
+  remove.hidden = !file;
+  if (!file) return;
+  if (file.size > MAX_FILE_BYTES) {
+    input.value = "";
+    remove.hidden = true;
+    showToast("Each evidence file must be 5 MB or smaller.");
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  previewUrls.set(inputId, url);
+  const player = document.createElement(type === "video" ? "video" : "img");
+  player.src = url;
+  if (type === "video") {
+    player.controls = true;
+    player.playsInline = true;
+  } else {
+    player.alt = "Selected photo preview";
+  }
+  preview.append(player);
+}
+
+for (const [inputId, previewId, removeId, type] of [
+  ["image", "imagePreview", "removeImageBtn", "image"],
+  ["video", "videoPreview", "removeVideoBtn", "video"]
+]) {
+  $(inputId).addEventListener("change", () =>
+    updateMediaPreview(inputId, previewId, removeId, type)
+  );
+  $(removeId).addEventListener("click", () => {
+    $(inputId).value = "";
+    updateMediaPreview(inputId, previewId, removeId, type);
+  });
+}
+
+
 /* =====================================================
   QUERY ID  (9 random digits, hard to guess)
    ===================================================== */
@@ -284,9 +510,10 @@ $("complaintForm").addEventListener(
     const imageFile = $("image").files[0];
 
     const docFile = $("document").files[0];
+    const videoFile = $("video").files[0];
 
 
-    for (const file of [imageFile, docFile]) {
+    for (const file of [imageFile, docFile, videoFile]) {
 
       if (file && file.size > MAX_FILE_BYTES) {
 
@@ -326,15 +553,24 @@ $("complaintForm").addEventListener(
         name: $("name").value.trim() || "Anonymous",
 
         location: $("location").value.trim(),
-
+        locationState: $("locationState").value.trim(),
+        locationVillage: $("locationVillage").value.trim(),
         issue: $("issue").value,
-
         details: $("details").value.trim()
-
       };
 
 
-      const result = await fb.createComplaint(complaint, imageFile, docFile);
+      const result = await fb.createComplaint(
+        complaint,
+        imageFile,
+        docFile,
+        videoFile,
+        message => {
+          $("submissionProgress").hidden = false;
+          $("submissionProgress").textContent = message;
+          button.textContent = message;
+        }
+      );
 
 
       $("submittedId").textContent =
@@ -350,8 +586,15 @@ $("complaintForm").addEventListener(
       }
 
       form.reset();
+      for (const [inputId, previewId, removeId, type] of [
+        ["image", "imagePreview", "removeImageBtn", "image"],
+        ["video", "videoPreview", "removeVideoBtn", "video"]
+      ]) {
+        updateMediaPreview(inputId, previewId, removeId, type);
+      }
 
       $("charCount").textContent = "0/1000";
+      $("submissionProgress").hidden = true;
 
       updateConsumerAuthUI(fb.currentUser());
 
@@ -368,6 +611,7 @@ $("complaintForm").addEventListener(
         "Complaint was not submitted"
         + (reason ? " (" + reason + ")." : ". Please try again.")
       );
+      $("submissionProgress").hidden = true;
 
     }
 
@@ -454,12 +698,19 @@ function renderTrack(list) {
       ${c.location
         ? `<p><b>Location:</b> ${escapeHTML(c.location)}</p>` : ""}
 
+      ${(c.locationVillage || c.locationState)
+        ? `<p><b>Village / Town:</b> ${escapeHTML(c.locationVillage || "—")} &nbsp; <b>State:</b> ${escapeHTML(c.locationState || "—")}</p>`
+        : ""}
+
       ${safeUrl(c.imageUrl)
         ? `<p><a href="${escapeHTML(safeUrl(c.imageUrl))}"
               target="_blank" rel="noopener">
               <img class="evidence-img"
                    src="${escapeHTML(safeUrl(c.imageUrl))}"
                    alt="Attached image"></a></p>` : ""}
+
+      ${safeUrl(c.videoUrl)
+        ? `<p><b>Attached video:</b><br><video controls playsinline class="evidence-video" src="${escapeHTML(safeUrl(c.videoUrl))}"></video></p>` : ""}
 
       ${safeUrl(c.documentUrl)
         ? `<p class="muted">Document:
@@ -472,6 +723,9 @@ function renderTrack(list) {
           ? `<b>Officer Response:</b> ${escapeHTML(c.response)}`
           : "⏳ Your complaint is under review. The service officer will reply soon."}
       </div>
+
+      ${safeUrl(c.responseAudioUrl)
+        ? `<p><b>Voice response:</b><br><audio controls preload="none" src="${escapeHTML(safeUrl(c.responseAudioUrl))}"></audio></p>` : ""}
 
       <p class="muted">
         <b>Last updated:</b> ${escapeHTML(c.updated)}
@@ -509,7 +763,7 @@ async function trackComplaint() {
 
     let list;
 
-    if (queryId) {
+    if (/^AC-\d{4}-\d{9}$/i.test(queryId)) {
 
       const complaint = await fb.getComplaint(queryId);
 
@@ -518,6 +772,17 @@ async function trackComplaint() {
     } else {
 
       list = await fb.listByOwner();
+      if (queryId) {
+        list = list.filter(c => [
+          c.id,
+          c.issue,
+          c.location,
+          c.locationVillage,
+          c.locationState,
+          c.details,
+          c.response
+        ].some(value => String(value || "").toLowerCase().includes(queryId.toLowerCase())));
+      }
 
     }
 
@@ -601,6 +866,8 @@ function startHandlerSession() {
         renderDashboard();
 
       }
+      if ($("complaint-history").classList.contains("active")) renderHistory();
+      if ($("give-solution").classList.contains("active")) populateSolutionSelect();
 
     },
 
@@ -626,6 +893,7 @@ async function logout() {
   handlerLoggedIn = false;
 
   complaints = [];
+  clearSolutionAudio();
 
   try { await fb.logout(); } catch (error) { console.error(error); }
 
@@ -645,13 +913,20 @@ async function logout() {
 function evidenceHTML(c) {
 
   const url = safeUrl(c.imageUrl);
+  const videoUrl = safeUrl(c.videoUrl);
+  const documentUrl = safeUrl(c.documentUrl);
+  const evidence = [];
 
-  return url
-
-    ? `<a href="${escapeHTML(url)}" target="_blank" rel="noopener">
-         <img class="thumb" src="${escapeHTML(url)}" alt="Evidence"></a>`
-
-    : "—";
+  if (url) evidence.push(
+    `<a href="${escapeHTML(url)}" target="_blank" rel="noopener"><img class="thumb" src="${escapeHTML(url)}" alt="Photo evidence"></a>`
+  );
+  if (videoUrl) evidence.push(
+    `<a href="${escapeHTML(videoUrl)}" target="_blank" rel="noopener">${escapeHTML(c.videoName || "Video")}</a>`
+  );
+  if (documentUrl) evidence.push(
+    `<a href="${escapeHTML(documentUrl)}" target="_blank" rel="noopener">${escapeHTML(c.documentName || "Document")}</a>`
+  );
+  return evidence.join("<br>") || "—";
 
 }
 
@@ -716,8 +991,53 @@ function renderDashboard() {
     complaints.filter(c => c.status === "Resolved").length;
 
 
-  renderRows(complaints);
+  const search = $("handlerSearch").value.trim().toLowerCase();
+  renderRows(complaints.filter(c =>
+    !["Resolved", "Rejected"].includes(c.status)
+    && matchesComplaintSearch(c, search)
+  ));
 
+}
+
+function matchesComplaintSearch(complaint, search) {
+  if (!search) return true;
+  return [
+    complaint.id,
+    complaint.name,
+    complaint.issue,
+    complaint.location,
+    complaint.locationVillage,
+    complaint.locationState,
+    complaint.details,
+    complaint.response
+  ].some(value => String(value || "").toLowerCase().includes(search));
+}
+
+function renderHistory() {
+  const search = $("historySearch").value.trim().toLowerCase();
+  const historical = complaints.filter(c =>
+    ["Resolved", "Rejected"].includes(c.status)
+    && matchesComplaintSearch(c, search)
+  );
+  renderRowsTo("historyTable", historical);
+}
+
+function renderRowsTo(tableId, list) {
+  const table = $(tableId);
+  if (!list.length) {
+    table.innerHTML = `<tr><td colspan="6">No matching complaints.</td></tr>`;
+    return;
+  }
+  table.innerHTML = list.map(c => `
+    <tr>
+      <td>${escapeHTML(c.id)}</td>
+      <td>${escapeHTML(c.name)}</td>
+      <td>${escapeHTML(c.issue)}</td>
+      <td><span class="status ${escapeHTML(c.status).replace(/\s.*/, "")}">${escapeHTML(c.status)}</span></td>
+      <td>${evidenceHTML(c)}</td>
+      <td><button class="secondary" onclick="openComplaint('${escapeJS(c.id)}')">View</button></td>
+    </tr>
+  `).join("");
 }
 
 
@@ -753,13 +1073,17 @@ function renderSolutionDetails(id) {
 
 
   const image = safeUrl(c.imageUrl);
-
   const file = safeUrl(c.documentUrl);
+
+  const video = safeUrl(c.videoUrl);
+  const responseAudio = safeUrl(c.responseAudioUrl);
 
 
   box.innerHTML = `
 
     <b>Location:</b> ${escapeHTML(c.location || "—")}<br>
+    <b>Village / Town:</b> ${escapeHTML(c.locationVillage || "—")}<br>
+    <b>State:</b> ${escapeHTML(c.locationState || "—")}<br>
 
     <b>Submitted:</b> ${escapeHTML(c.created)}<br><br>
 
@@ -774,6 +1098,14 @@ function renderSolutionDetails(id) {
     ${file
       ? `<br><br>📎 <a href="${escapeHTML(file)}" target="_blank"
            rel="noopener">${escapeHTML(c.documentName)}</a>`
+      : ""}
+
+    ${video
+      ? `<br><br><video controls playsinline class="evidence-video" src="${escapeHTML(video)}"></video>`
+      : ""}
+
+    ${responseAudio
+      ? `<br><br><b>Previous voice response:</b><br><audio controls preload="none" src="${escapeHTML(responseAudio)}"></audio>`
       : ""}
 
   `;
@@ -841,6 +1173,8 @@ $("solutionComplaint").addEventListener(
   "change",
   function () {
 
+    clearSolutionAudio();
+
     currentComplaint =
       complaints.find(item => item.id === this.value) || null;
 
@@ -848,6 +1182,137 @@ $("solutionComplaint").addEventListener(
 
   }
 );
+
+let solutionAudioFile = null;
+let solutionAudioUrl = null;
+let solutionAudioRecorder = null;
+let solutionAudioStream = null;
+let solutionAudioComplaintId = "";
+let solutionAudioFinalizing = false;
+
+function clearSolutionAudio() {
+  if (solutionAudioRecorder && solutionAudioRecorder.state !== "inactive") {
+    solutionAudioRecorder.stop();
+  }
+  if (solutionAudioStream) {
+    solutionAudioStream.getTracks().forEach(track => track.stop());
+  }
+  if (solutionAudioUrl) URL.revokeObjectURL(solutionAudioUrl);
+  solutionAudioFile = null;
+  solutionAudioUrl = null;
+  solutionAudioRecorder = null;
+  solutionAudioStream = null;
+  solutionAudioComplaintId = "";
+  solutionAudioFinalizing = false;
+  $("solutionAudioPreview").removeAttribute("src");
+  $("solutionAudioPreview").hidden = true;
+  $("removeSolutionAudioBtn").hidden = true;
+  $("recordSolutionAudioBtn").disabled = false;
+  $("stopSolutionAudioBtn").disabled = true;
+  $("solutionAudioStatus").textContent =
+    "Optional voice recording, up to 5 MB. It is attached only when you send the response.";
+}
+
+async function startSolutionAudioRecording() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    showToast("Voice recording is not supported in this browser.");
+    return;
+  }
+  if (!$("solutionComplaint").value) {
+    showToast("Select a complaint before recording a voice response.");
+    return;
+  }
+  if (solutionAudioFile) {
+    showToast("Remove the current recording before recording a new one.");
+    return;
+  }
+  try {
+    solutionAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : undefined;
+    solutionAudioRecorder = preferredType
+      ? new MediaRecorder(solutionAudioStream, { mimeType: preferredType })
+      : new MediaRecorder(solutionAudioStream);
+    const recorder = solutionAudioRecorder;
+    const recordingStream = solutionAudioStream;
+    solutionAudioComplaintId = $("solutionComplaint").value;
+    const chunks = [];
+    recorder.addEventListener("dataavailable", event => {
+      if (event.data.size) chunks.push(event.data);
+    });
+    recorder.addEventListener("stop", () => {
+      const mimeType = recorder.mimeType || (chunks[0] && chunks[0].type);
+      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+      recordingStream.getTracks().forEach(track => track.stop());
+      if (solutionAudioRecorder !== recorder) return;
+      solutionAudioStream = null;
+      solutionAudioRecorder = null;
+      solutionAudioFinalizing = false;
+      $("recordSolutionAudioBtn").disabled = false;
+      $("stopSolutionAudioBtn").disabled = true;
+      if (blob.size > MAX_FILE_BYTES) {
+        solutionAudioComplaintId = "";
+        $("solutionAudioStatus").textContent =
+          "Recording is larger than 5 MB. Please make a shorter recording.";
+        return;
+      }
+      if (!blob.size) {
+        solutionAudioComplaintId = "";
+        $("solutionAudioStatus").textContent = "No audio was recorded.";
+        return;
+      }
+      const extension = blob.type.includes("mp4") ? "mp4"
+        : blob.type.includes("ogg") ? "ogg" : "webm";
+      solutionAudioFile = new File(
+        [blob],
+        `voice-response-${Date.now()}.${extension}`,
+        { type: blob.type }
+      );
+      solutionAudioUrl = URL.createObjectURL(solutionAudioFile);
+      $("solutionAudioPreview").src = solutionAudioUrl;
+      $("solutionAudioPreview").hidden = false;
+      $("removeSolutionAudioBtn").hidden = false;
+      $("solutionAudioStatus").textContent =
+        "Recording ready (" + (blob.size / 1024 / 1024).toFixed(2) + " MB).";
+    }, { once: true });
+    solutionAudioRecorder.start();
+    solutionAudioFinalizing = false;
+    $("recordSolutionAudioBtn").disabled = true;
+    $("stopSolutionAudioBtn").disabled = false;
+    $("solutionAudioStatus").textContent = "Recording... Select Stop recording when finished.";
+  } catch (error) {
+    if (solutionAudioStream) {
+      solutionAudioStream.getTracks().forEach(track => track.stop());
+    }
+    solutionAudioStream = null;
+    solutionAudioRecorder = null;
+    console.error("Could not start voice recording.", error);
+    $("solutionAudioStatus").textContent =
+      "Could not start recording. Check microphone permission and try again.";
+  }
+}
+
+$("recordSolutionAudioBtn").addEventListener("click", startSolutionAudioRecording);
+$("stopSolutionAudioBtn").addEventListener("click", () => {
+  if (solutionAudioRecorder && solutionAudioRecorder.state !== "inactive") {
+    solutionAudioFinalizing = true;
+    solutionAudioRecorder.stop();
+  }
+});
+$("removeSolutionAudioBtn").addEventListener("click", clearSolutionAudio);
+
+for (const id of ["handlerSearch", "historySearch"]) {
+  $(id).addEventListener("input", () => {
+    if (id === "handlerSearch") renderDashboard();
+    else renderHistory();
+  });
+}
+
+function useSolutionTemplate(text) {
+  $("solutionText").value = text;
+  $("solutionText").focus();
+}
 
 
 async function sendSolution() {
@@ -874,12 +1339,35 @@ async function sendSolution() {
 
   }
 
+  if (
+    solutionAudioFinalizing
+    || (solutionAudioRecorder && solutionAudioRecorder.state !== "inactive")
+  ) {
+    showToast("Stop the voice recording before sending the response.");
+    return;
+  }
+
+  if (solutionAudioFile && solutionAudioComplaintId !== id) {
+    showToast("The voice recording belongs to a different complaint. Record it again.");
+    clearSolutionAudio();
+    return;
+  }
+
 
   try {
 
-    await fb.respond(id, $("solutionStatus").value, response);
+    const result = await fb.respond(
+      id,
+      $("solutionStatus").value,
+      response,
+      solutionAudioFile
+    );
 
-    showToast("Solution saved. The complaint status has been updated.");
+    showToast(result.audioError
+      ? "Text solution saved, but the voice recording could not be uploaded."
+      : "Solution saved. The complaint status has been updated.");
+
+    if (!result.audioError) clearSolutionAudio();
 
     showPage("dashboard");
 

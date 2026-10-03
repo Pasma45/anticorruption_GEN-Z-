@@ -127,7 +127,7 @@ if (!isFirebaseConfigured()) {
   async function uploadEvidence(user, complaintId, file, kind) {
     if (!file) return null;
     if (file.size > MAX_FILE_BYTES) {
-      throw new Error("Each file must be smaller than 5 MB.");
+      throw new Error("Each file must be 5 MB or smaller.");
     }
     const fileRef = ref(
       storage,
@@ -140,50 +140,64 @@ if (!isFirebaseConfigured()) {
     };
   }
 
-  async function createComplaint(complaint, imageFile, docFile) {
+  async function createComplaint(complaint, imageFile, docFile, videoFile, onProgress) {
     const user = requireConsumerUser();
     const now = new Date().toLocaleString();
     const complaintRef = doc(db, "complaints", complaint.id);
 
+    if (onProgress) onProgress("Saving your complaint...");
     await setDoc(complaintRef, {
       ...complaint,
       ownerUid: user.uid,
       status: "Pending",
       response: "",
+      responseAudioUrl: "",
+      responseAudioPath: "",
       imageUrl: "",
       imagePath: "",
       documentUrl: "",
       documentPath: "",
       documentName: "",
+      videoUrl: "",
+      videoPath: "",
+      videoName: "",
       created: now,
       updated: now,
       createdAt: serverTimestamp()
     });
 
+    if (onProgress && (imageFile || docFile || videoFile)) {
+      onProgress("Complaint saved. Uploading your selected evidence...");
+    }
     const uploads = await Promise.allSettled([
       uploadEvidence(user, complaint.id, imageFile, "image"),
-      uploadEvidence(user, complaint.id, docFile, "document")
+      uploadEvidence(user, complaint.id, docFile, "document"),
+      uploadEvidence(user, complaint.id, videoFile, "video")
     ]);
     const image = uploads[0].status === "fulfilled" ? uploads[0].value : null;
     const document = uploads[1].status === "fulfilled" ? uploads[1].value : null;
+    const video = uploads[2].status === "fulfilled" ? uploads[2].value : null;
     const evidenceErrors = uploads.filter(result => result.status === "rejected");
 
     for (const result of evidenceErrors) {
       console.error("Complaint submitted, but evidence could not be uploaded.", result.reason);
     }
 
-    if (image || document) {
+    if (image || document || video) {
       try {
         await updateDoc(complaintRef, {
           imageUrl: image ? image.url : "",
           imagePath: image ? image.path : "",
           documentUrl: document ? document.url : "",
           documentPath: document ? document.path : "",
-          documentName: document ? docFile.name : ""
+          documentName: document ? docFile.name : "",
+          videoUrl: video ? video.url : "",
+          videoPath: video ? video.path : "",
+          videoName: video ? videoFile.name : ""
         });
       } catch (error) {
         await Promise.all(
-          [image, document]
+          [image, document, video]
             .filter(Boolean)
             .map(file =>
               deleteObject(ref(storage, file.path)).catch(cleanupError => {
@@ -196,6 +210,7 @@ if (!isFirebaseConfigured()) {
       }
     }
 
+    if (onProgress) onProgress("Complaint submitted.");
     return { evidenceErrors: evidenceErrors.length };
   }
 
@@ -229,15 +244,54 @@ if (!isFirebaseConfigured()) {
       .sort((first, second) => second.createdAt.toMillis() - first.createdAt.toMillis());
   }
 
-  async function respond(id, status, response) {
+  async function respond(id, status, response, audioFile) {
     if (!(await handlerRecord())) {
       throw new Error("Only an authorised service handler can respond.");
     }
-    await updateDoc(doc(db, "complaints", id), {
+    const complaintRef = doc(db, "complaints", id);
+    const snapshot = await getDoc(complaintRef);
+    if (!snapshot.exists()) throw new Error("Complaint not found.");
+    const complaint = snapshot.data();
+    const previousAudioPath = complaint.responseAudioPath || "";
+    await updateDoc(complaintRef, {
       status,
       response,
+      responseAudioUrl: "",
+      responseAudioPath: "",
       updated: new Date().toLocaleString()
     });
+
+    if (previousAudioPath) {
+      await deleteObject(ref(storage, previousAudioPath)).catch(error => {
+        console.error("Could not remove the previous voice response.", error);
+      });
+    }
+
+    if (!audioFile) return { audioError: false };
+
+    let audioRef = null;
+    try {
+      const extension = audioFile.type.includes("mp4") ? "mp4"
+        : audioFile.type.includes("ogg") ? "ogg" : "webm";
+      audioRef = ref(
+        storage,
+        `complaints/${complaint.ownerUid}/${id}/response-audio-${Date.now()}.${extension}`
+      );
+      await uploadBytes(audioRef, audioFile, { contentType: audioFile.type });
+      await updateDoc(complaintRef, {
+        responseAudioUrl: await getDownloadURL(audioRef),
+        responseAudioPath: audioRef.fullPath
+      });
+      return { audioError: false };
+    } catch (error) {
+      if (audioRef) {
+        await deleteObject(audioRef).catch(cleanupError => {
+          console.error("Could not clean up the failed voice response upload.", cleanupError);
+        });
+      }
+      console.error("The text response was saved, but its voice recording could not be uploaded.", error);
+      return { audioError: true };
+    }
   }
 
   window.fb = {
