@@ -32,6 +32,8 @@ numbers.
 - The Twilio SMS function has not been deployed. The local website changes
   are published to GitHub Pages at
   `https://pasma45.github.io/anticorruption_GEN-Z-/`.
+- The response-email function is source code only until Firebase is on the
+  Blaze plan and SMTP secrets are configured.
 
 ## 1. Create and configure Firebase
 
@@ -127,10 +129,11 @@ the consumer's signed-in complaint tracker, but no email is sent.
    firebase functions:secrets:set TWILIO_FROM_NUMBER
    ```
 
-3. Deploy the SMS function:
+3. Deploy only the legacy SMS function (do not use `--only functions`, which
+   also selects the email function and requires its SMTP secrets):
 
    ```powershell
-   firebase deploy --only functions
+   firebase deploy --only functions:notifyConsumerOfResponse
    ```
 
 The function can send texts only for older complaint records that already
