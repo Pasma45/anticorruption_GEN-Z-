@@ -623,9 +623,25 @@
       </h1>
 
       <p class="muted">
-        Authorised personnel only. Enter your registered mobile
-        number to receive a one-time password (OTP).
+        Authorised personnel only. Sign in with an approved Google or Apple
+        account, or verify your registered mobile number with an OTP.
       </p>
+
+      <button
+        type="button"
+        class="secondary wide"
+        onclick="handlerProviderSignIn('google')">
+        Continue with Google
+      </button>
+
+      <button
+        type="button"
+        class="secondary wide"
+        onclick="handlerProviderSignIn('apple')">
+        Continue with Apple
+      </button>
+
+      <div class="login-divider"><span>OR USE MOBILE OTP</span></div>
 
       <label>
         Mobile Number

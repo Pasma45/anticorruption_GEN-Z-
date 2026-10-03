@@ -14,14 +14,48 @@ service cloud.firestore {
     }
 
     function handler() {
-      return authMobile() != ''
-        && exists(/databases/$(database)/documents/handlers/$(authMobile()))
-        && get(/databases/$(database)/documents/handlers/$(authMobile())).data.active == true;
+      return (
+          authMobile() != ''
+          && exists(/databases/$(database)/documents/handlers/$(authMobile()))
+          && get(/databases/$(database)/documents/handlers/$(authMobile())).data.active == true
+        )
+        || (
+          signedIn()
+          && request.auth.token.email_verified == true
+          && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
+          && exists(/databases/$(database)/documents/handlerAccounts/$(request.auth.uid))
+          && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.uid)).data.active == true
+          && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.uid)).data.email == request.auth.token.email
+        );
     }
 
     match /handlers/{mobile} {
       allow get: if signedIn() && mobile == authMobile();
       allow list, create, update, delete: if false;
+    }
+
+    match /handlerAccounts/{uid} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /securityLoginEvents/{eventId} {
+      allow create: if signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider in ['google.com', 'apple.com']
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'provider', 'loginAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'provider', 'loginAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.provider == request.auth.token.firebase.sign_in_provider
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 200
+        && request.resource.data.loginAt == request.time;
+      allow read, update, delete: if false;
     }
 
     match /complaints/{complaintId} {

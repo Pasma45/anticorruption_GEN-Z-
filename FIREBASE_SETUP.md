@@ -17,6 +17,9 @@ requesting an OTP or sending an SMS.
 - Firebase currently limits this project to 10 sent SMS messages per day
   without billing. Firebase Authentication displays this quota in its
   Sign-in method settings; add billing only if a higher SMS quota is needed.
+- Google and Apple officer sign-in are implemented in the website. Enable and
+  configure each provider in Firebase Authentication before using it. Only
+  accounts explicitly listed in `handlerAccounts/{firebaseUid}` are authorised.
 - The standard Cloud Firestore default database exists in Delhi
   (`asia-south2`) in Native mode. It is currently on the free tier.
 - Firestore security rules are deployed. Cloud Storage is not set up because
@@ -61,6 +64,28 @@ requesting an OTP or sending an SMS.
    10-digit mobile number, for example `9876543210`. Add the boolean field
    `active` with value `true`. Do not add public write access to this
    collection; the deployed rules intentionally deny client-side changes.
+
+6. To allow Google sign-in, open **Authentication → Sign-in method**, enable
+   Google, and configure the project's public-facing name and support email.
+   To allow Apple sign-in, enable Apple and configure it with an Apple
+   Developer Services ID, Team ID, Key ID, and private key. Add
+   `https://anti-corruption-portal-genz.firebaseapp.com/__/auth/handler` as
+   the Apple Services ID return URL. Keep the Apple private key out of website
+   files and source control.
+7. Each Google/Apple officer must sign in once so Firebase creates the auth
+   user. In **Authentication → Users**, copy that user's Firebase UID. In
+   Firestore create `handlerAccounts/{uid}` with fields `email` (the verified
+   provider email) and `active` (`true`). Access is denied until this record is
+   added. Set `active` to `false` to revoke access.
+8. Successful approved Google/Apple officer sign-ins append a record to
+   `securityLoginEvents` containing the provider name, Firebase UID, verified
+   email, display name, and server login timestamp. These records are not
+   readable from the website client; inspect them in the Firebase Console.
+   Deploy the updated rules before enabling officer sign-in:
+
+   ```powershell
+   firebase deploy --only firestore:rules
+   ```
 
 ## 2. Configure actual response SMS
 

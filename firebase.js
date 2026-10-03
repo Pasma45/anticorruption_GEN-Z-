@@ -1,12 +1,16 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import {
+  GoogleAuthProvider,
+  OAuthProvider,
   getAuth,
   onAuthStateChanged,
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -83,9 +87,51 @@ if (!isFirebaseConfigured()) {
 
   async function handlerRecord() {
     const user = requireUser();
+    const provider = user.providerData.find(item =>
+      item.providerId === "google.com" || item.providerId === "apple.com"
+    );
+
+    if (provider) {
+      if (!user.email || !user.emailVerified) return false;
+      const snapshot = await getDoc(doc(db, "handlerAccounts", user.uid));
+      return snapshot.exists()
+        && snapshot.data().active === true
+        && snapshot.data().email === user.email;
+    }
+
+    if (!user.phoneNumber) return false;
     const mobile = mobileFromPhone(user.phoneNumber);
     const snapshot = await getDoc(doc(db, "handlers", mobile));
     return snapshot.exists() && snapshot.data().active === true;
+  }
+
+  async function signInHandler(providerName) {
+    let provider;
+    if (providerName === "google") {
+      provider = new GoogleAuthProvider();
+    } else if (providerName === "apple") {
+      provider = new OAuthProvider("apple.com");
+      provider.addScope("email");
+      provider.addScope("name");
+    } else {
+      throw new Error("Unsupported sign-in provider.");
+    }
+
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    if (!(await handlerRecord())) {
+      await signOut(auth);
+      throw new Error("This Google or Apple account is not approved as a service handler.");
+    }
+
+    await addDoc(collection(db, "securityLoginEvents"), {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || "",
+      provider: providerName === "google" ? "google.com" : "apple.com",
+      loginAt: serverTimestamp()
+    });
+    return user;
   }
 
   async function sendOtp(mobileValue) {
@@ -231,6 +277,7 @@ if (!isFirebaseConfigured()) {
     listByMobile,
     respond,
     isHandler: handlerRecord,
+    signInHandler,
     logout: () => signOut(auth)
   };
 

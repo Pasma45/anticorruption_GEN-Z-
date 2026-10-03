@@ -156,6 +156,42 @@ function otpFailureMessage(error) {
 }
 
 
+async function handlerProviderSignIn(provider) {
+
+  if (!window.fb) {
+
+    showToast("Still connecting. Try again in a moment.");
+
+    return;
+
+  }
+
+  try {
+
+    const user = await fb.signInHandler(provider);
+    startHandlerSession();
+    showPage("dashboard");
+    showToast("Signed in as " + (user.displayName || user.email) + ".");
+
+  } catch (error) {
+
+    console.error(error);
+
+    if (error && error.code === "auth/operation-not-allowed") {
+      showToast("This sign-in provider is not enabled in Firebase Authentication yet.");
+    } else if (error && error.code === "auth/popup-closed-by-user") {
+      showToast("Sign-in was cancelled.");
+    } else {
+      showToast(error && error.message
+        ? error.message
+        : "Could not sign in. Please try again.");
+    }
+
+  }
+
+}
+
+
 /* =====================================================
    CHARACTER COUNTER
    ===================================================== */
