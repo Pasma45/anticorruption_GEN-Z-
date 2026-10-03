@@ -14,13 +14,17 @@ requesting an OTP or sending an SMS.
   and its web app is registered.
 - Phone sign-in is enabled, `pasma45.github.io` is an authorised domain, and
   the SMS policy allows India.
+- Firebase currently limits this project to 10 sent SMS messages per day
+  without billing. Firebase Authentication displays this quota in its
+  Sign-in method settings; add billing only if a higher SMS quota is needed.
 - The standard Cloud Firestore default database exists in Delhi
   (`asia-south2`) in Native mode. It is currently on the free tier.
 - Firestore security rules are deployed. Cloud Storage is not set up because
   the project needs a billing account to enable it; evidence uploads will not
   work until Storage is set up and its rules are deployed.
 - The Twilio SMS function has not been deployed. The local website changes
-  have not yet been published to GitHub Pages.
+  are published to GitHub Pages at
+  `https://pasma45.github.io/anticorruption_GEN-Z-/`.
 
 ## 1. Create and configure Firebase
 

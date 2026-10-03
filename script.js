@@ -109,6 +109,50 @@ function showToast(message) {
 }
 
 
+function otpFailureMessage(error) {
+
+  const code = error && typeof error.code === "string"
+    ? error.code
+    : "";
+
+  switch (code) {
+
+    case "auth/unauthorized-domain":
+      return "Firebase rejected this website domain. Add pasma45.github.io under Authentication > Settings > Authorised domains.";
+
+    case "auth/quota-exceeded":
+      return "Firebase's free OTP SMS limit may be reached (10 per day). Try again tomorrow or link billing to increase the limit.";
+
+    case "auth/too-many-requests":
+      return "Too many OTP attempts. Wait before trying again, or use Firebase test phone numbers during development.";
+
+    case "auth/billing-not-enabled":
+      return "Firebase requires a billing account to send more OTP messages. Check the project's SMS quota in Firebase Authentication.";
+
+    case "auth/captcha-check-failed":
+    case "auth/missing-app-credential":
+    case "auth/invalid-app-credential":
+      return "Firebase could not verify this browser. Reload the page and try again; check that pasma45.github.io is an authorised domain.";
+
+    case "auth/operation-not-allowed":
+      return "Phone OTP sign-in is disabled in Firebase Authentication.";
+
+    case "auth/invalid-phone-number":
+      return "Firebase rejected this phone number. Enter a valid Indian 10-digit mobile number.";
+
+    case "auth/network-request-failed":
+      return "The OTP request could not reach Firebase. Check your internet connection and try again.";
+
+    default:
+      return code
+        ? `OTP request failed (${code}). Please try again or contact the site administrator.`
+        : "OTP request failed. Please try again or contact the site administrator.";
+
+  }
+
+}
+
+
 /* =====================================================
    CHARACTER COUNTER
    ===================================================== */
@@ -170,7 +214,7 @@ async function consumerSendOtp() {
 
     console.error(error);
 
-    showToast("Could not send the OTP. Please try again.");
+    showToast(otpFailureMessage(error));
 
   }
 
@@ -514,7 +558,7 @@ async function trackComplaint() {
 
     console.error(error);
 
-    showToast("Could not complete the request. Please try again.");
+    showToast(otpFailureMessage(error));
 
   }
 
@@ -626,7 +670,7 @@ async function handlerSendOtp() {
 
     console.error(error);
 
-    showToast("Could not send the OTP. Please try again.");
+    showToast(otpFailureMessage(error));
 
   }
 
