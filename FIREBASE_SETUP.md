@@ -20,8 +20,10 @@ numbers.
 - The standard Cloud Firestore default database exists in Delhi
   (`asia-south2`) in Native mode. It is currently on the free tier.
 - Firestore security rules are deployed. Cloud Storage is not set up because
-  the project needs a billing account to enable it; evidence uploads will not
-  work until Storage is set up and its rules are deployed.
+  the project needs a billing account to enable it. Complaint records are
+  saved to Firestore before evidence uploads are attempted, so an unavailable
+  Storage bucket will not prevent a complaint from reaching the handler inbox.
+  The confirmation page warns if an attachment could not be uploaded.
 - The Twilio SMS function has not been deployed. The local website changes
   are published to GitHub Pages at
   `https://pasma45.github.io/anticorruption_GEN-Z-/`.
@@ -126,6 +128,13 @@ publication root. Never use Firebase test/open rules on a live site.
   read only their own complaints.
 - Evidence files are limited to 5 MB. Firestore and Storage rules are in
   `firestore.rules` and `storage.rules`.
+- A submitted complaint receives a Query ID and is stored in Firestore before
+  optional evidence uploads. If evidence upload fails, the complaint remains
+  available to the handler and the complainant can still track it.
+- Complainants can recover forgotten Query IDs by signing in with the same
+  verified Google or Apple account and leaving the Query ID field blank. The
+  app lists only records owned by that signed-in Firebase account; it does not
+  provide public lookup by arbitrary email address.
 - The client stores Firebase's download URLs with complaint records so the
   handler can display evidence. Treat those URLs as private: anyone who gets a
   download URL may be able to access that file.

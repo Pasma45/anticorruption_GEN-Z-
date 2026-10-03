@@ -468,11 +468,16 @@
          class="complaint-id">
     </div>
 
+    <p id="submittedEvidenceNotice"
+       class="notice"
+       hidden>
+    </p>
 
     <p class="muted">
 
       Keep your Query ID and sign in with the same Google or Apple
-      account to track this complaint.
+      account to track this complaint. If you forget the ID, use that
+      account's email to sign in and view your complaint history.
 
     </p>
 
@@ -515,7 +520,7 @@
         Track Your Complaint
       </h1>
 
-      <p>Sign in with the Google or Apple account used to submit your complaint.</p>
+      <p>Sign in with the same Google or Apple email used to submit your complaint. Leave the Query ID blank to recover your complaint history.</p>
 
     </div>
 
@@ -569,14 +574,14 @@
 
       <input
         id="trackQueryId"
-        placeholder="Optional: Query ID"
+        placeholder="Query ID (optional)"
       >
 
       <button
         class="primary"
         onclick="trackComplaint()">
 
-        Find Complaints
+        Find by ID or Show My Complaints
 
       </button>
 

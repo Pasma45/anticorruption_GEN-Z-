@@ -18,6 +18,46 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/handlerAccounts/$(request.auth.token.email)).data.email == request.auth.token.email;
     }
 
+    function consumerEvidenceUpdate(complaintId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let imagePath = request.resource.data.imagePath;
+      let documentPath = request.resource.data.documentPath;
+      return consumer()
+        && resource.data.ownerUid == request.auth.uid
+        && changed.hasAny(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName'])
+        && changed.hasOnly(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName'])
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.response == resource.data.response
+        && imagePath is string
+        && (
+          (imagePath == '' && request.resource.data.imageUrl == '')
+          || (
+            imagePath.matches('^complaints/[^/]+/[^/]+/image$')
+            && imagePath.split('/')[1] == request.auth.uid
+            && imagePath.split('/')[2] == complaintId
+            && request.resource.data.imageUrl.matches('^https://firebasestorage.googleapis.com/.*$')
+          )
+        )
+        && documentPath is string
+        && (
+          (
+            documentPath == ''
+            && request.resource.data.documentUrl == ''
+            && request.resource.data.documentName == ''
+          )
+          || (
+            documentPath.matches('^complaints/[^/]+/[^/]+/document$')
+            && documentPath.split('/')[1] == request.auth.uid
+            && documentPath.split('/')[2] == complaintId
+            && request.resource.data.documentUrl.matches('^https://firebasestorage.googleapis.com/.*$')
+            && request.resource.data.documentName is string
+            && request.resource.data.documentName.size() <= 255
+          )
+        )
+        && (resource.data.imagePath == '' || imagePath == resource.data.imagePath)
+        && (resource.data.documentPath == '' || documentPath == resource.data.documentPath);
+    }
+
     match /handlers/{mobile} {
       allow read, write: if false;
     }
@@ -90,12 +130,15 @@ service cloud.firestore {
       allow get, list: if handler()
         || (consumer() && resource.data.ownerUid == request.auth.uid);
 
-      allow update: if handler()
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'response', 'updated'])
-        && request.resource.data.status in ['Pending', 'Under Review', 'Resolved', 'Rejected']
-        && request.resource.data.response is string
-        && request.resource.data.response.size() <= 1000;
+      allow update: if (
+          handler()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'response', 'updated'])
+          && request.resource.data.status in ['Pending', 'Under Review', 'Resolved', 'Rejected']
+          && request.resource.data.response is string
+          && request.resource.data.response.size() <= 1000
+        )
+        || consumerEvidenceUpdate(complaintId);
 
       allow delete: if false;
     }

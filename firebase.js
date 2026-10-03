@@ -142,39 +142,61 @@ if (!isFirebaseConfigured()) {
 
   async function createComplaint(complaint, imageFile, docFile) {
     const user = requireConsumerUser();
+    const now = new Date().toLocaleString();
+    const complaintRef = doc(db, "complaints", complaint.id);
 
-    const uploaded = [];
-    try {
-      const image = await uploadEvidence(user, complaint.id, imageFile, "image");
-      if (image) uploaded.push(image.path);
-      const document = await uploadEvidence(user, complaint.id, docFile, "document");
-      if (document) uploaded.push(document.path);
+    await setDoc(complaintRef, {
+      ...complaint,
+      ownerUid: user.uid,
+      status: "Pending",
+      response: "",
+      imageUrl: "",
+      imagePath: "",
+      documentUrl: "",
+      documentPath: "",
+      documentName: "",
+      created: now,
+      updated: now,
+      createdAt: serverTimestamp()
+    });
 
-      const now = new Date().toLocaleString();
-      await setDoc(doc(db, "complaints", complaint.id), {
-        ...complaint,
-        ownerUid: user.uid,
-        status: "Pending",
-        response: "",
-        imageUrl: image ? image.url : "",
-        imagePath: image ? image.path : "",
-        documentUrl: document ? document.url : "",
-        documentPath: document ? document.path : "",
-        documentName: docFile ? docFile.name : "",
-        created: now,
-        updated: now,
-        createdAt: serverTimestamp()
-      });
-    } catch (error) {
-      await Promise.all(
-        uploaded.map(path =>
-          deleteObject(ref(storage, path)).catch(cleanupError => {
-            console.error("Could not clean up uploaded evidence.", cleanupError);
-          })
-        )
-      );
-      throw error;
+    const uploads = await Promise.allSettled([
+      uploadEvidence(user, complaint.id, imageFile, "image"),
+      uploadEvidence(user, complaint.id, docFile, "document")
+    ]);
+    const image = uploads[0].status === "fulfilled" ? uploads[0].value : null;
+    const document = uploads[1].status === "fulfilled" ? uploads[1].value : null;
+    const evidenceErrors = uploads.filter(result => result.status === "rejected");
+
+    for (const result of evidenceErrors) {
+      console.error("Complaint submitted, but evidence could not be uploaded.", result.reason);
     }
+
+    if (image || document) {
+      try {
+        await updateDoc(complaintRef, {
+          imageUrl: image ? image.url : "",
+          imagePath: image ? image.path : "",
+          documentUrl: document ? document.url : "",
+          documentPath: document ? document.path : "",
+          documentName: document ? docFile.name : ""
+        });
+      } catch (error) {
+        await Promise.all(
+          [image, document]
+            .filter(Boolean)
+            .map(file =>
+              deleteObject(ref(storage, file.path)).catch(cleanupError => {
+                console.error("Could not clean up uploaded evidence.", cleanupError);
+              })
+            )
+        );
+        console.error("Complaint submitted, but evidence references could not be saved.", error);
+        evidenceErrors.push({ status: "rejected", reason: error });
+      }
+    }
+
+    return { evidenceErrors: evidenceErrors.length };
   }
 
   function listen(onNext, onError) {

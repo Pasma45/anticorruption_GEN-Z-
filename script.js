@@ -184,16 +184,21 @@ function updateConsumerAuthUI(user) {
 
   const signedIn = Boolean(user && window.fb && fb.isConsumer());
 
-  for (const id of ["consumerAuthStatus", "trackAuthStatus"]) {
+  const statuses = {
+    consumerAuthStatus: signedIn
+      ? "Signed in as " + user.email + ". You can submit a complaint."
+      : "Sign in with Google or Apple to submit and track your complaints.",
+    trackAuthStatus: signedIn
+      ? "Signed in as " + user.email + ". Leave Query ID blank to find complaints submitted with this account."
+      : "Sign in with Google or Apple to find complaints submitted with that account."
+  };
+
+  for (const [id, message] of Object.entries(statuses)) {
 
     const status = $(id);
-
     if (status) {
-      status.textContent = signedIn
-        ? "Signed in as " + (user.displayName || user.email) + "."
-        : "Sign in with Google or Apple to submit and track your complaints.";
+      status.textContent = message;
     }
-
   }
 
   for (const id of ["consumerAuthButtons", "trackAuthButtons"]) {
@@ -329,11 +334,19 @@ $("complaintForm").addEventListener(
       };
 
 
-      await fb.createComplaint(complaint, imageFile, docFile);
+      const result = await fb.createComplaint(complaint, imageFile, docFile);
 
 
       $("submittedId").textContent =
         "Query ID: " + complaint.id;
+
+      const evidenceNotice = $("submittedEvidenceNotice");
+      evidenceNotice.hidden = !result.evidenceErrors;
+      if (result.evidenceErrors) {
+        evidenceNotice.textContent =
+          "Your complaint was submitted, but " + result.evidenceErrors
+          + " evidence file(s) could not be uploaded. Keep your Query ID; you can still track the complaint.";
+      }
 
       form.reset();
 
@@ -349,7 +362,11 @@ $("complaintForm").addEventListener(
 
       console.error(error);
 
-      showToast("Could not submit the complaint. Please try again.");
+      const reason = error && (error.code || error.message);
+      showToast(
+        "Complaint was not submitted"
+        + (reason ? " (" + reason + ")." : ". Please try again.")
+      );
 
     }
 
