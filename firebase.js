@@ -136,12 +136,11 @@ if (!isFirebaseConfigured()) {
   async function sendOtp(mobileValue) {
     const mobile = normalizeMobile(mobileValue);
     confirmationResult = null;
-    if (recaptchaVerifier) {
-      recaptchaVerifier.clear();
+    if (!recaptchaVerifier) {
+      recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible"
+      });
     }
-    recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-      size: "invisible"
-    });
     confirmationResult = await signInWithPhoneNumber(
       auth,
       `${DEFAULT_COUNTRY_CODE}${mobile}`,
@@ -158,10 +157,6 @@ if (!isFirebaseConfigured()) {
     }
     const result = await confirmationResult.confirm(String(code).trim());
     confirmationResult = null;
-    if (recaptchaVerifier) {
-      recaptchaVerifier.clear();
-      recaptchaVerifier = null;
-    }
     return result;
   }
 
