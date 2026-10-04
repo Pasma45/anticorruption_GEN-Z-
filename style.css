@@ -327,6 +327,28 @@ body {
   gap: 20px;
 }
 
+.advertisement {
+  max-width: 980px;
+  min-height: 90px;
+  margin: 28px auto 0;
+  padding: 12px 18px;
+  overflow: hidden;
+  border: 1px solid #dce7f1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.advertisement[hidden] {
+  display: none;
+}
+
+.advertisement-label {
+  margin: 0 0 8px;
+  color: #71859b;
+  font-size: 11px;
+  text-align: right;
+}
+
 
 .panel,
 .form-card,

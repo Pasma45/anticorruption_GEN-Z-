@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Anti Corruption Portal</title>
   <link rel="stylesheet" href="style.css">
+  <script src="adsense-config.js"></script>
+  <script async
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3157493936030014"
+    crossorigin="anonymous"></script>
 </head>
 
 <body>
@@ -253,6 +257,15 @@
     </div>
 
   </div>
+
+  <aside id="homeAdvertisement" class="advertisement" aria-label="Advertisement" hidden>
+    <p class="advertisement-label">Advertisement</p>
+    <ins
+      class="adsbygoogle"
+      style="display:block"
+      data-ad-format="auto"
+      data-full-width-responsive="true"></ins>
+  </aside>
 
 </section>
 
@@ -1318,6 +1331,19 @@
 </div>
 
 
+<script>
+  (() => {
+    const config = window.PORTAL_ADSENSE;
+    const homeSlotId = config && config.homeSlotId;
+    if (!/^\d+$/.test(homeSlotId || "")) return;
+    const ad = document.querySelector("#homeAdvertisement .adsbygoogle");
+    if (!ad) return;
+    ad.setAttribute("data-ad-client", "ca-pub-3157493936030014");
+    ad.setAttribute("data-ad-slot", homeSlotId);
+    document.getElementById("homeAdvertisement").hidden = false;
+    (window.adsbygoogle = window.adsbygoogle || []).push({});
+  })();
+</script>
 <script src="script.js"></script>
 <script type="module" src="firebase.js"></script>
 
