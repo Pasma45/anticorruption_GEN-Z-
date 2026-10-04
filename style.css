@@ -65,6 +65,24 @@ body {
   flex-wrap: wrap;
 }
 
+.interface-language-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e5f2ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.interface-language-label select {
+  max-width: 225px;
+  padding: 9px;
+  color: #123c68;
+  background: #fff;
+  border: 1px solid #c9d9e8;
+  border-radius: 7px;
+}
+
 
 .link-btn,
 .icon-btn {
@@ -378,7 +396,8 @@ body {
 
 .media-preview video,
 .media-preview img,
-.evidence-video {
+.evidence-video,
+audio {
   display: block;
   max-width: min(100%, 420px);
   max-height: 280px;
@@ -507,6 +526,101 @@ body {
 
   box-shadow:
     0 10px 30px #123b6510;
+}
+
+.receipt-card {
+  max-width: 760px;
+  text-align: left;
+}
+
+.receipt-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px;
+  margin: -10px auto 24px;
+  color: #fff;
+  background: linear-gradient(110deg, #06264a, #0b4f91);
+  border-radius: 12px;
+}
+
+.receipt-brand .brand-mark {
+  font-size: 32px;
+}
+
+.receipt-brand strong,
+.receipt-brand small {
+  display: block;
+}
+
+.receipt-brand small {
+  margin-top: 4px;
+  color: #c8e3ff;
+}
+
+.receipt-details {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1px solid #dce7f1;
+  border-radius: 12px;
+  background: #f8fbff;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.receipt-details p {
+  line-height: 1.6;
+}
+
+.solution-receipt blockquote {
+  margin: 8px 0 0;
+  padding: 14px;
+  border-left: 4px solid #087de9;
+  border-radius: 4px;
+  background: #edf7ff;
+  white-space: pre-wrap;
+}
+
+.receipt-card > .success-icon,
+.receipt-card > .eyebrow,
+.receipt-card > h1,
+.receipt-card > p:not(.eyebrow) {
+  text-align: center;
+}
+
+.receipt-card > button {
+  margin: 6px;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .topbar,
+  footer,
+  .receipt-card > button,
+  #toast {
+    display: none !important;
+  }
+
+  .page {
+    display: none !important;
+    max-width: none;
+    padding: 0;
+  }
+
+  .page.active {
+    display: block !important;
+  }
+
+  .success-card {
+    max-width: none;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
 }
 
 
@@ -900,6 +1014,21 @@ th {
   font-size: 14px;
 }
 
+.legal-reference {
+  margin-top: 20px;
+  line-height: 1.7;
+}
+
+.legal-reference li {
+  margin: 10px 0;
+  color: #425d78;
+}
+
+.legal-reference a {
+  color: #087de9;
+  font-weight: 700;
+}
+
 
 /* ================= PROFILE ================= */
 
@@ -1034,6 +1163,9 @@ footer {
     padding: 15px 18px;
   }
 
+  .interface-language-label {
+    flex-wrap: wrap;
+  }
 
   .brand strong {
     font-size: 15px;

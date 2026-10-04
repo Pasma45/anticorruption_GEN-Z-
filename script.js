@@ -1,8 +1,8 @@
 /* =====================================================
    ANTI CORRUPTION PORTAL  (Firebase version)
 
-   Data is stored in Firestore / Storage (see firebase.js).
-   Nothing is saved in localStorage any more.
+   Complaints and evidence are stored in Firestore / Storage (see firebase.js).
+   localStorage is limited to language preferences and translated UI copy.
    ===================================================== */
 
 
@@ -16,11 +16,18 @@ let stopListening = null;
 
 let knownIds = null;            // used to announce NEW complaints
 
+let complaintAudioFile = null;
+let complaintAudioUrl = null;
+let complaintAudioRecorder = null;
+let complaintAudioStream = null;
+let complaintAudioFinalizing = false;
+let interfaceTextTranslations = new Map();
 
 const PROTECTED_PAGES = [
   "dashboard",
   "complaint-history",
   "give-solution",
+  "solution-sent",
   "profile"
 ];
 
@@ -49,6 +56,14 @@ function safeUrl(url) {
 function showPage(id) {
 
   if (activeRecognition) activeRecognition.stop();
+  if (
+    id !== "consumer"
+    && complaintAudioRecorder
+    && complaintAudioRecorder.state !== "inactive"
+  ) {
+    complaintAudioFinalizing = true;
+    complaintAudioRecorder.stop();
+  }
   if (
     id !== "give-solution"
     && solutionAudioRecorder
@@ -106,7 +121,7 @@ function showToast(message) {
 
   const toast = $("toast");
 
-  toast.textContent = message;
+  toast.textContent = interfaceTextTranslations.get(message) || message;
 
   toast.classList.add("show");
 
@@ -369,6 +384,111 @@ $("readComplaintBtn").addEventListener("click", () =>
   )
 );
 
+function clearComplaintAudio() {
+  if (complaintAudioRecorder && complaintAudioRecorder.state !== "inactive") {
+    complaintAudioRecorder.stop();
+  }
+  if (complaintAudioStream) {
+    complaintAudioStream.getTracks().forEach(track => track.stop());
+  }
+  if (complaintAudioUrl) URL.revokeObjectURL(complaintAudioUrl);
+  complaintAudioFile = null;
+  complaintAudioUrl = null;
+  complaintAudioRecorder = null;
+  complaintAudioStream = null;
+  complaintAudioFinalizing = false;
+  $("complaintAudioPreview").removeAttribute("src");
+  $("complaintAudioPreview").hidden = true;
+  $("removeComplaintAudioBtn").hidden = true;
+  $("recordComplaintAudioBtn").disabled = false;
+  $("stopComplaintAudioBtn").disabled = true;
+  $("complaintAudioStatus").textContent =
+    "Optional audio attachment, up to 5 MB. Your recording is stored with this complaint.";
+}
+
+async function startComplaintAudioRecording() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    showToast("Audio recording is not supported in this browser.");
+    return;
+  }
+  if (complaintAudioFile) {
+    showToast("Remove the current recording before recording another.");
+    return;
+  }
+  try {
+    complaintAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : undefined;
+    complaintAudioRecorder = preferredType
+      ? new MediaRecorder(complaintAudioStream, { mimeType: preferredType })
+      : new MediaRecorder(complaintAudioStream);
+    const recorder = complaintAudioRecorder;
+    const recordingStream = complaintAudioStream;
+    const chunks = [];
+    recorder.addEventListener("dataavailable", event => {
+      if (event.data.size) chunks.push(event.data);
+    });
+    recorder.addEventListener("stop", () => {
+      const mimeType = recorder.mimeType || (chunks[0] && chunks[0].type);
+      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+      recordingStream.getTracks().forEach(track => track.stop());
+      if (complaintAudioRecorder !== recorder) return;
+      complaintAudioStream = null;
+      complaintAudioRecorder = null;
+      complaintAudioFinalizing = false;
+      $("recordComplaintAudioBtn").disabled = false;
+      $("stopComplaintAudioBtn").disabled = true;
+      if (blob.size > MAX_FILE_BYTES) {
+        $("complaintAudioStatus").textContent =
+          "Recording is larger than 5 MB. Make a shorter recording and try again.";
+        return;
+      }
+      if (!blob.size) {
+        $("complaintAudioStatus").textContent = "No audio was recorded.";
+        return;
+      }
+      const extension = blob.type.includes("mp4") ? "mp4"
+        : blob.type.includes("ogg") ? "ogg" : "webm";
+      complaintAudioFile = new File(
+        [blob],
+        `complaint-audio-${Date.now()}.${extension}`,
+        { type: blob.type }
+      );
+      complaintAudioUrl = URL.createObjectURL(complaintAudioFile);
+      $("complaintAudioPreview").src = complaintAudioUrl;
+      $("complaintAudioPreview").hidden = false;
+      $("removeComplaintAudioBtn").hidden = false;
+      $("complaintAudioStatus").textContent =
+        "Recording ready (" + (blob.size / 1024 / 1024).toFixed(2) + " MB).";
+    }, { once: true });
+    recorder.start();
+    complaintAudioFinalizing = false;
+    $("recordComplaintAudioBtn").disabled = true;
+    $("stopComplaintAudioBtn").disabled = false;
+    $("complaintAudioStatus").textContent =
+      "Recording... Select Stop recording when finished.";
+  } catch (error) {
+    if (complaintAudioStream) {
+      complaintAudioStream.getTracks().forEach(track => track.stop());
+    }
+    complaintAudioStream = null;
+    complaintAudioRecorder = null;
+    console.error("Could not start complaint audio recording.", error);
+    $("complaintAudioStatus").textContent =
+      "Could not start recording. Check microphone permission and try again.";
+  }
+}
+
+$("recordComplaintAudioBtn").addEventListener("click", startComplaintAudioRecording);
+$("stopComplaintAudioBtn").addEventListener("click", () => {
+  if (complaintAudioRecorder && complaintAudioRecorder.state !== "inactive") {
+    complaintAudioFinalizing = true;
+    complaintAudioRecorder.stop();
+  }
+});
+$("removeComplaintAudioBtn").addEventListener("click", clearComplaintAudio);
+
 
 async function fillCurrentLocation() {
   const button = $("useLocationBtn");
@@ -434,10 +554,7 @@ function updateMediaPreview(inputId, previewId, removeId, type) {
   remove.hidden = !file;
   if (!file) return;
   if (file.size > MAX_FILE_BYTES) {
-    input.value = "";
-    remove.hidden = true;
-    showToast("Each evidence file must be 5 MB or smaller.");
-    return;
+    showToast("This file is larger than 5 MB and will not upload. You can remove it and continue with your complaint.");
   }
   const url = URL.createObjectURL(file);
   previewUrls.set(inputId, url);
@@ -464,6 +581,12 @@ for (const [inputId, previewId, removeId, type] of [
     updateMediaPreview(inputId, previewId, removeId, type);
   });
 }
+
+$("document").addEventListener("change", function () {
+  if (this.files[0] && this.files[0].size > MAX_FILE_BYTES) {
+    showToast("This document is larger than 5 MB and will not upload. You can remove it and continue with your complaint.");
+  }
+});
 
 
 /* =====================================================
@@ -506,24 +629,28 @@ $("complaintForm").addEventListener(
 
     }
 
+    if (
+      complaintAudioFinalizing
+      || (complaintAudioRecorder && complaintAudioRecorder.state !== "inactive")
+    ) {
+      showToast("Stop the audio recording before submitting the complaint.");
+      return;
+    }
 
     const imageFile = $("image").files[0];
 
     const docFile = $("document").files[0];
     const videoFile = $("video").files[0];
+    const audioFile = complaintAudioFile;
 
 
-    for (const file of [imageFile, docFile, videoFile]) {
-
-      if (file && file.size > MAX_FILE_BYTES) {
-
-        showToast("Each file must be smaller than 5 MB.");
-
-        return;
-
-      }
-
-    }
+    const selectedEvidenceCount = [imageFile, docFile, videoFile, audioFile].filter(Boolean).length;
+    const oversizedEvidenceCount = [imageFile, docFile, videoFile, audioFile]
+      .filter(file => file && file.size > MAX_FILE_BYTES).length;
+    const uploadImage = imageFile && imageFile.size <= MAX_FILE_BYTES ? imageFile : null;
+    const uploadDocument = docFile && docFile.size <= MAX_FILE_BYTES ? docFile : null;
+    const uploadVideo = videoFile && videoFile.size <= MAX_FILE_BYTES ? videoFile : null;
+    const uploadAudio = audioFile && audioFile.size <= MAX_FILE_BYTES ? audioFile : null;
 
 
     if (!window.fb) {
@@ -559,16 +686,31 @@ $("complaintForm").addEventListener(
         details: $("details").value.trim()
       };
 
+      let evidenceStatus = null;
 
       const result = await fb.createComplaint(
         complaint,
-        imageFile,
-        docFile,
-        videoFile,
-        message => {
+        uploadImage,
+        uploadDocument,
+        uploadVideo,
+        uploadAudio,
+        update => {
+          evidenceStatus = { ...update };
+          if (update.status === "uploading" && oversizedEvidenceCount) {
+            evidenceStatus.message += ` ${oversizedEvidenceCount} file(s) exceed the 5 MB upload limit.`;
+          } else if (update.status !== "uploading" && oversizedEvidenceCount) {
+            evidenceStatus.errors = (update.errors || 0) + oversizedEvidenceCount;
+            evidenceStatus.total = selectedEvidenceCount;
+            evidenceStatus.status = "partial";
+            evidenceStatus.message =
+              `Complaint submitted, but ${evidenceStatus.errors} of ${selectedEvidenceCount} evidence file(s) could not be uploaded (5 MB maximum per file).`;
+          }
           $("submissionProgress").hidden = false;
-          $("submissionProgress").textContent = message;
-          button.textContent = message;
+          $("submissionProgress").textContent = evidenceStatus.message;
+          button.textContent = evidenceStatus.message;
+          if ($("submitted").classList.contains("active")) {
+            renderSubmittedEvidenceStatus(evidenceStatus);
+          }
         }
       );
 
@@ -576,16 +718,25 @@ $("complaintForm").addEventListener(
       $("submittedId").textContent =
         "Query ID: " + complaint.id;
       $("submittedId").dataset.queryId = complaint.id;
+      $("submittedConsumerEmail").textContent =
+        fb.currentUser().email || "Your verified sign-in email";
+      $("submittedHandlerEmail").textContent =
+        "A handler contact will appear when your case is assigned.";
 
-      const evidenceNotice = $("submittedEvidenceNotice");
-      evidenceNotice.hidden = !result.evidenceErrors;
-      if (result.evidenceErrors) {
-        evidenceNotice.textContent =
-          "Your complaint was submitted, but " + result.evidenceErrors
-          + " evidence file(s) could not be uploaded. Keep your Query ID; you can still track the complaint.";
-      }
+      renderSubmittedEvidenceStatus(evidenceStatus || {
+        status: result.evidencePending ? "uploading" : oversizedEvidenceCount ? "partial" : "complete",
+        errors: oversizedEvidenceCount,
+        total: selectedEvidenceCount,
+        message: result.evidencePending
+          ? "Your complaint is saved and visible in the handler inbox. Evidence is uploading in the background."
+            + (oversizedEvidenceCount ? ` ${oversizedEvidenceCount} file(s) exceed the 5 MB limit.` : "")
+          : oversizedEvidenceCount
+            ? `Your complaint is saved, but ${oversizedEvidenceCount} evidence file(s) exceed the 5 MB upload limit.`
+            : "Your complaint has been saved and sent to the handler inbox."
+      });
 
       form.reset();
+      clearComplaintAudio();
       for (const [inputId, previewId, removeId, type] of [
         ["image", "imagePreview", "removeImageBtn", "image"],
         ["video", "videoPreview", "removeVideoBtn", "video"]
@@ -625,6 +776,20 @@ $("complaintForm").addEventListener(
 
   }
 );
+
+function renderSubmittedEvidenceStatus(update) {
+  const notice = $("submittedEvidenceNotice");
+  if (!update || (!update.total && update.status === "complete")) {
+    notice.hidden = true;
+    return;
+  }
+  notice.hidden = false;
+  notice.textContent = update.status === "uploading"
+    ? "Your complaint is saved and visible in the handler inbox. Evidence is uploading in the background; keep this page open until it finishes."
+    : update.errors
+      ? update.message + " The complaint itself remains saved in the handler inbox."
+      : "Complaint and selected evidence have been uploaded successfully.";
+}
 
 
 /* =====================================================
@@ -670,7 +835,7 @@ function renderTrack(list) {
 
     $("trackResult").innerHTML = `
       <div class="panel">
-        <p>No complaint found for this account and filter.</p>
+        <p>${escapeHTML(uiText("No complaint found for this account and filter."))}</p>
       </div>`;
 
     return;
@@ -689,17 +854,17 @@ function renderTrack(list) {
         </span>
       </h2>
 
-      <p><b>Issue:</b> ${escapeHTML(c.issue)}</p>
+      <p><b>${escapeHTML(uiText("Issue:"))}</b> ${escapeHTML(c.issue)}</p>
 
-      <p><b>Submitted:</b> ${escapeHTML(c.created)}</p>
+      <p><b>${escapeHTML(uiText("Submitted:"))}</b> ${escapeHTML(c.created)}</p>
 
       <p>${escapeHTML(c.details)}</p>
 
       ${c.location
-        ? `<p><b>Location:</b> ${escapeHTML(c.location)}</p>` : ""}
+        ? `<p><b>${escapeHTML(uiText("Location:"))}</b> ${escapeHTML(c.location)}</p>` : ""}
 
       ${(c.locationVillage || c.locationState)
-        ? `<p><b>Village / Town:</b> ${escapeHTML(c.locationVillage || "—")} &nbsp; <b>State:</b> ${escapeHTML(c.locationState || "—")}</p>`
+        ? `<p><b>${escapeHTML(uiText("Village / Town:"))}</b> ${escapeHTML(c.locationVillage || "—")} &nbsp; <b>${escapeHTML(uiText("State:"))}</b> ${escapeHTML(c.locationState || "—")}</p>`
         : ""}
 
       ${safeUrl(c.imageUrl)
@@ -709,26 +874,33 @@ function renderTrack(list) {
                    src="${escapeHTML(safeUrl(c.imageUrl))}"
                    alt="Attached image"></a></p>` : ""}
 
+      ${safeUrl(c.complaintAudioUrl)
+        ? `<p><b>${escapeHTML(uiText("Audio complaint:"))}</b><br><audio controls preload="none" src="${escapeHTML(safeUrl(c.complaintAudioUrl))}"></audio></p>` : ""}
+
       ${safeUrl(c.videoUrl)
-        ? `<p><b>Attached video:</b><br><video controls playsinline class="evidence-video" src="${escapeHTML(safeUrl(c.videoUrl))}"></video></p>` : ""}
+        ? `<p><b>${escapeHTML(uiText("Attached video:"))}</b><br><video controls playsinline class="evidence-video" src="${escapeHTML(safeUrl(c.videoUrl))}"></video></p>` : ""}
 
       ${safeUrl(c.documentUrl)
-        ? `<p class="muted">Document:
+        ? `<p class="muted">${escapeHTML(uiText("Document:"))}
               <a href="${escapeHTML(safeUrl(c.documentUrl))}"
                  target="_blank" rel="noopener">
                  ${escapeHTML(c.documentName)}</a></p>` : ""}
 
       <div class="notice">
         ${c.response
-          ? `<b>Officer Response:</b> ${escapeHTML(c.response)}`
-          : "⏳ Your complaint is under review. The service officer will reply soon."}
+          ? `<b>${escapeHTML(uiText("Officer Response:"))}</b> ${escapeHTML(c.response)}`
+          : "⏳ " + escapeHTML(uiText("Your complaint is under review. The service officer will reply soon."))}
       </div>
 
+      ${c.handlerEmail
+        ? `<p class="notice"><b>${escapeHTML(uiText("Service handler contact:"))}</b> <a href="mailto:${escapeHTML(c.handlerEmail)}">${escapeHTML(c.handlerEmail)}</a></p>`
+        : ""}
+
       ${safeUrl(c.responseAudioUrl)
-        ? `<p><b>Voice response:</b><br><audio controls preload="none" src="${escapeHTML(safeUrl(c.responseAudioUrl))}"></audio></p>` : ""}
+        ? `<p><b>${escapeHTML(uiText("Voice response:"))}</b><br><audio controls preload="none" src="${escapeHTML(safeUrl(c.responseAudioUrl))}"></audio></p>` : ""}
 
       <p class="muted">
-        <b>Last updated:</b> ${escapeHTML(c.updated)}
+        <b>${escapeHTML(uiText("Last updated:"))}</b> ${escapeHTML(c.updated)}
       </p>
 
     </div>
@@ -809,6 +981,14 @@ window.addEventListener("fb-auth", async function (event) {
 
   updateConsumerAuthUI(user);
 
+  if (
+    interfaceLanguageSelect.value !== "en"
+    && appliedInterfaceLanguage !== interfaceLanguageSelect.value
+    && !interfaceTranslationBusy
+  ) {
+    changeInterfaceLanguage(interfaceLanguageSelect.value);
+  }
+
   if (!user || handlerLoggedIn) return;
 
   try {
@@ -883,6 +1063,35 @@ function startHandlerSession() {
 
 }
 
+async function refreshHandlerInbox() {
+  if (!window.fb || !handlerLoggedIn) {
+    showToast("Sign in as an authorised service handler to refresh the inbox.");
+    return;
+  }
+
+  const button = $("refreshComplaintsBtn");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Refreshing...";
+  try {
+    complaints = await fb.refreshComplaints();
+    knownIds = new Set(complaints.map(complaint => complaint.id));
+    renderDashboard();
+    renderHistory();
+    if ($("give-solution").classList.contains("active")) populateSolutionSelect();
+    showToast("Complaint inbox refreshed.");
+  } catch (error) {
+    console.error("Could not refresh the complaint inbox.", error);
+    showToast(
+      "Could not refresh the complaint inbox"
+      + (error.code ? " (" + error.code + ")." : ". Check your connection and handler access.")
+    );
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 
 async function logout() {
 
@@ -913,12 +1122,16 @@ async function logout() {
 function evidenceHTML(c) {
 
   const url = safeUrl(c.imageUrl);
+  const audioUrl = safeUrl(c.complaintAudioUrl);
   const videoUrl = safeUrl(c.videoUrl);
   const documentUrl = safeUrl(c.documentUrl);
   const evidence = [];
 
   if (url) evidence.push(
     `<a href="${escapeHTML(url)}" target="_blank" rel="noopener"><img class="thumb" src="${escapeHTML(url)}" alt="Photo evidence"></a>`
+  );
+  if (audioUrl) evidence.push(
+    `<audio controls preload="none" aria-label="${escapeHTML(uiText("Audio complaint:"))}" src="${escapeHTML(audioUrl)}"></audio>`
   );
   if (videoUrl) evidence.push(
     `<a href="${escapeHTML(videoUrl)}" target="_blank" rel="noopener">${escapeHTML(c.videoName || "Video")}</a>`
@@ -936,7 +1149,7 @@ function renderRows(list) {
   if (!list.length) {
 
     $("complaintsTable").innerHTML =
-      `<tr><td colspan="6">No complaints yet.</td></tr>`;
+      `<tr><td colspan="6">${escapeHTML(uiText("No complaints yet."))}</td></tr>`;
 
     return;
 
@@ -1073,6 +1286,7 @@ function renderSolutionDetails(id) {
 
 
   const image = safeUrl(c.imageUrl);
+  const audio = safeUrl(c.complaintAudioUrl);
   const file = safeUrl(c.documentUrl);
 
   const video = safeUrl(c.videoUrl);
@@ -1081,18 +1295,22 @@ function renderSolutionDetails(id) {
 
   box.innerHTML = `
 
-    <b>Location:</b> ${escapeHTML(c.location || "—")}<br>
-    <b>Village / Town:</b> ${escapeHTML(c.locationVillage || "—")}<br>
-    <b>State:</b> ${escapeHTML(c.locationState || "—")}<br>
+    <b>${escapeHTML(uiText("Location:"))}</b> ${escapeHTML(c.location || "—")}<br>
+    <b>${escapeHTML(uiText("Village / Town:"))}</b> ${escapeHTML(c.locationVillage || "—")}<br>
+    <b>${escapeHTML(uiText("State:"))}</b> ${escapeHTML(c.locationState || "—")}<br>
 
-    <b>Submitted:</b> ${escapeHTML(c.created)}<br><br>
+    <b>${escapeHTML(uiText("Submitted:"))}</b> ${escapeHTML(c.created)}<br><br>
 
-    <b>Details:</b> ${escapeHTML(c.details)}
+    <b>${escapeHTML(uiText("Details:"))}</b> ${escapeHTML(c.details)}
 
     ${image
       ? `<br><br><a href="${escapeHTML(image)}" target="_blank" rel="noopener">
            <img class="evidence-img" src="${escapeHTML(image)}"
-                alt="Image uploaded by the consumer"></a>`
+                alt="${escapeHTML(uiText("Image uploaded by the consumer"))}"></a>`
+      : ""}
+
+    ${audio
+      ? `<br><br><b>${escapeHTML(uiText("Consumer audio complaint:"))}</b><br><audio controls preload="none" src="${escapeHTML(audio)}"></audio>`
       : ""}
 
     ${file
@@ -1105,7 +1323,7 @@ function renderSolutionDetails(id) {
       : ""}
 
     ${responseAudio
-      ? `<br><br><b>Previous voice response:</b><br><audio controls preload="none" src="${escapeHTML(responseAudio)}"></audio>`
+      ? `<br><br><b>${escapeHTML(uiText("Previous voice response:"))}</b><br><audio controls preload="none" src="${escapeHTML(responseAudio)}"></audio>`
       : ""}
 
   `;
@@ -1139,7 +1357,7 @@ function populateSolutionSelect() {
   if (!complaints.length) {
 
     $("solutionComplaint").innerHTML =
-      `<option value="">No complaints</option>`;
+      `<option value="">${escapeHTML(uiText("No complaints"))}</option>`;
 
     $("solutionDetails").innerHTML = "";
 
@@ -1320,9 +1538,12 @@ async function sendSolution() {
   const id = $("solutionComplaint").value;
 
   const response = $("solutionText").value.trim();
+  const sendButton = document.querySelector("#give-solution button[onclick=\"sendSolution()\"]");
+  const originalLabel = sendButton.textContent;
 
 
-  if (!complaints.some(item => item.id === id)) {
+  const selectedComplaint = complaints.find(item => item.id === id);
+  if (!selectedComplaint) {
 
     showToast("No complaint selected.");
 
@@ -1331,9 +1552,9 @@ async function sendSolution() {
   }
 
 
-  if (!response) {
+  if (!response && $("solutionStatus").value === selectedComplaint.status) {
 
-    showToast("Write a response first.");
+    showToast("Write a response or choose a different status.");
 
     return;
 
@@ -1353,6 +1574,8 @@ async function sendSolution() {
     return;
   }
 
+  sendButton.disabled = true;
+  sendButton.textContent = "Sending solution...";
 
   try {
 
@@ -1363,13 +1586,27 @@ async function sendSolution() {
       solutionAudioFile
     );
 
+    const complaint = complaints.find(item => item.id === id);
+    const handlerEmail = fb.currentUser().email || "";
+    $("solutionSentId").textContent = id;
+    $("solutionSentTitle").textContent = response ? "Solution Sent" : "Status Updated";
+    $("solutionSentStatus").textContent = $("solutionStatus").value;
+    $("solutionSentConsumerEmail").textContent =
+      complaint && complaint.consumerEmail
+        ? complaint.consumerEmail
+        : "Notification goes to the verified email on the consumer's account.";
+    $("solutionSentHandlerEmail").textContent = handlerEmail;
+    $("solutionSentResponse").textContent = response;
+    $("solutionSentResponseLabel").hidden = !response;
+    $("solutionSentResponse").hidden = !response;
+
     showToast(result.audioError
       ? "Text solution saved, but the voice recording could not be uploaded."
       : "Solution saved. The complaint status has been updated.");
 
     if (!result.audioError) clearSolutionAudio();
 
-    showPage("dashboard");
+    showPage("solution-sent");
 
   }
 
@@ -1377,8 +1614,16 @@ async function sendSolution() {
 
     console.error(error);
 
-    showToast("Could not save the solution. Check your login.");
+    showToast(
+      "Could not save the solution"
+      + (error && (error.code || error.message)
+        ? " (" + (error.code || error.message) + ")."
+        : ". Check your login and connection.")
+    );
 
+  } finally {
+    sendButton.disabled = false;
+    sendButton.textContent = originalLabel;
   }
 
 }
@@ -1571,6 +1816,221 @@ function setLanguage(language) {
 
 }
 
+const interfaceLanguageToSpeechLocale = {
+  as: "as-IN",
+  bn: "bn-IN",
+  gu: "gu-IN",
+  hi: "hi-IN",
+  kn: "kn-IN",
+  ks: "ks-IN",
+  kok: "kok-IN",
+  mai: "mai-IN",
+  ml: "ml-IN",
+  mni: "mni-IN",
+  mr: "mr-IN",
+  ne: "ne-IN",
+  or: "or-IN",
+  pa: "pa-IN",
+  sa: "sa-IN",
+  sat: "sat-IN",
+  sd: "sd-IN",
+  ta: "ta-IN",
+  te: "te-IN",
+  ur: "ur-IN"
+};
+let interfaceCopy = [];
+let appliedInterfaceLanguage = "en";
+let interfaceTranslationBusy = false;
+
+function captureInterfaceCopy() {
+  const excludedSelectors = [
+    "script", "style", "noscript", "textarea", "input",
+    ".speech-language", "#interfaceLanguageSelect",
+    "#trackResult", "#complaintsTable", "#historyTable",
+    "#solutionDetails", "#toast"
+  ].join(",");
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const parent = node.parentElement;
+    const source = node.nodeValue || "";
+    if (
+      parent
+      && source.trim()
+      && !parent.closest(excludedSelectors)
+    ) {
+      interfaceCopy.push({ kind: "text", target: node, source });
+    }
+    node = walker.nextNode();
+  }
+
+  document.querySelectorAll(
+    "input[placeholder], input[title], textarea[placeholder], button[title]"
+  )
+    .forEach(element => {
+      for (const attribute of ["placeholder", "title"]) {
+        const source = element.getAttribute(attribute);
+        if (source) interfaceCopy.push({ kind: attribute, target: element, source });
+      }
+    });
+
+  const generatedInterfaceText = [
+    "No complaint found for this account and filter.",
+    "No complaints yet.",
+    "No complaints",
+    "Issue:",
+    "Submitted:",
+    "Location:",
+    "Village / Town:",
+    "State:",
+    "Details:",
+    "Audio complaint:",
+    "Attached video:",
+    "Document:",
+    "Officer Response:",
+    "Your complaint is under review. The service officer will reply soon.",
+    "Service handler contact:",
+    "Voice response:",
+    "Last updated:",
+    "Consumer audio complaint:",
+    "Previous voice response:",
+    "Photo evidence",
+    "Image uploaded by the consumer"
+  ];
+  generatedInterfaceText.forEach(source =>
+    interfaceCopy.push({ kind: "catalog", target: null, source })
+  );
+}
+
+function interfaceCopyFingerprint() {
+  const source = interfaceCopy.map(item => item.source).join("\u001f");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function applyInterfaceTranslations(translations) {
+  interfaceTextTranslations = new Map();
+  const decoder = document.createElement("textarea");
+  interfaceCopy.forEach((item, index) => {
+    const encodedTranslation = translations[index];
+    if (typeof encodedTranslation !== "string") return;
+    decoder.innerHTML = encodedTranslation;
+    const translated = decoder.value;
+    interfaceTextTranslations.set(item.source.trim(), translated);
+    if (item.kind === "text") {
+      const leading = item.source.match(/^\s*/)[0];
+      const trailing = item.source.match(/\s*$/)[0];
+      item.target.nodeValue = leading + translated + trailing;
+    } else if (item.target) {
+      item.target.setAttribute(item.kind, translated);
+    }
+  });
+}
+
+function uiText(text) {
+  return interfaceTextTranslations.get(text) || text;
+}
+
+function setSpeechLocaleForInterface(language) {
+  const locale = interfaceLanguageToSpeechLocale[language];
+  if (!locale) return;
+  for (const id of speechLocaleIds) {
+    const select = $(id);
+    if (select && Array.from(select.options).some(option => option.value === locale)) {
+      select.value = locale;
+      localStorage.setItem("portalSpeechLanguage", locale);
+    }
+  }
+}
+
+async function changeInterfaceLanguage(language) {
+  const status = $("languageStatus");
+  const selector = $("interfaceLanguageSelect");
+  const fingerprint = interfaceCopyFingerprint();
+  if (language === "en") {
+    applyInterfaceTranslations(interfaceCopy.map(item => item.source));
+    document.documentElement.lang = "en";
+    document.documentElement.dir = "ltr";
+    localStorage.setItem("portalInterfaceLanguage", "en");
+    appliedInterfaceLanguage = "en";
+    status.textContent = "Interface language: English.";
+    return;
+  }
+  if (!window.fb || !fb.translateInterface) {
+    status.textContent = "Translation is connecting. Please try again shortly.";
+    return;
+  }
+
+  selector.disabled = true;
+  interfaceTranslationBusy = true;
+  status.textContent = "Translating interface labels. Complaint and response text stays unchanged.";
+  const cacheKey = `portalInterface-${language}-${fingerprint}`;
+  try {
+    let translations = null;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) translations = JSON.parse(cached);
+    } catch (error) {
+      console.warn("Could not read cached interface translations.", error);
+    }
+    if (!Array.isArray(translations) || translations.length !== interfaceCopy.length) {
+      translations = [];
+      for (let offset = 0; offset < interfaceCopy.length; offset += 80) {
+        const batch = interfaceCopy.slice(offset, offset + 80);
+        const translated = await fb.translateInterface(
+          language,
+          batch.map(item => item.source.trim())
+        );
+        translations.push(...translated);
+      }
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(translations));
+      } catch (error) {
+        console.warn("Could not cache interface translations.", error);
+      }
+    }
+    applyInterfaceTranslations(translations);
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "ur" ? "rtl" : "ltr";
+    setSpeechLocaleForInterface(language);
+    localStorage.setItem("portalInterfaceLanguage", language);
+    appliedInterfaceLanguage = language;
+    status.textContent = "Interface translated. Machine translation may need human review; complaint and response text was not sent.";
+  } catch (error) {
+    console.error("Could not translate the interface.", error);
+    applyInterfaceTranslations(interfaceCopy.map(item => item.source));
+    selector.value = "en";
+    document.documentElement.lang = "en";
+    document.documentElement.dir = "ltr";
+    appliedInterfaceLanguage = "en";
+    status.textContent = "Translation failed. English is shown; check Translation API setup and try again.";
+    showToast(
+      "Could not translate the interface"
+      + (error && error.code ? " (" + error.code + ")." : ". Check Firebase Translation API setup.")
+    );
+  } finally {
+    selector.disabled = false;
+    interfaceTranslationBusy = false;
+  }
+}
+
+const interfaceLanguageSelect = $("interfaceLanguageSelect");
+interfaceLanguageSelect.addEventListener("change", event =>
+  changeInterfaceLanguage(event.target.value)
+);
+
+const savedInterfaceLanguage =
+  localStorage.getItem("portalInterfaceLanguage") || "en";
+if (Array.from(interfaceLanguageSelect.options).some(option =>
+  option.value === savedInterfaceLanguage && !option.disabled
+)) {
+  interfaceLanguageSelect.value = savedInterfaceLanguage;
+}
+
 
 /* =====================================================
    RENDER ACTIONS
@@ -1702,3 +2162,7 @@ function escapeJS(value) {
 renderActions();
 
 showPage("home");
+captureInterfaceCopy();
+if (savedInterfaceLanguage !== "en" && !interfaceLanguageSelect.options[interfaceLanguageSelect.selectedIndex].disabled) {
+  changeInterfaceLanguage(savedInterfaceLanguage);
+}

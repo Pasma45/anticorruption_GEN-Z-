@@ -21,6 +21,33 @@
   </div>
 
   <div class="top-actions">
+    <label class="interface-language-label" for="interfaceLanguageSelect">Interface language
+      <select id="interfaceLanguageSelect" aria-label="Interface language">
+        <option value="en">English</option>
+        <option value="as" disabled>অসমীয়া — not available in Google Translate</option>
+        <option value="bn">বাংলা</option>
+        <option value="brx" disabled>बर' — not available in Google Translate</option>
+        <option value="doi" disabled>डोगरी — not available in Google Translate</option>
+        <option value="gu">ગુજરાતી</option>
+        <option value="hi">हिन्दी</option>
+        <option value="kn">ಕನ್ನಡ</option>
+        <option value="ks" disabled>کٲشُر — not available in Google Translate</option>
+        <option value="kok" disabled>कोंकणी — not available in Google Translate</option>
+        <option value="mai" disabled>मैथिली — not available in Google Translate</option>
+        <option value="ml">മലയാളം</option>
+        <option value="mni" disabled>ꯃꯤꯇꯩꯂꯣꯟ — not available in Google Translate</option>
+        <option value="mr">मराठी</option>
+        <option value="ne">नेपाली</option>
+        <option value="or">ଓଡ଼ିଆ (experimental)</option>
+        <option value="pa">ਪੰਜਾਬੀ</option>
+        <option value="sa" disabled>संस्कृतम् — not available in Google Translate</option>
+        <option value="sat" disabled>ᱥᱟᱱᱛᱟᱲᱤ — not available in Google Translate</option>
+        <option value="sd" disabled>سنڌي — not available in Google Translate</option>
+        <option value="ta">தமிழ்</option>
+        <option value="te">తెలుగు</option>
+        <option value="ur">اردو</option>
+      </select>
+    </label>
     <button class="link-btn" onclick="showPage('take-action')">
       ⚖ Take Action
     </button>
@@ -412,11 +439,28 @@
             <option value="or-IN">ଓଡ଼ିଆ</option>
             <option value="as-IN">অসমীয়া</option>
             <option value="ur-IN">اردو</option>
+            <option value="mai-IN">मैथिली</option>
+            <option value="sat-IN">ᱥᱟᱱᱛᱟᱲᱤ</option>
+            <option value="ks-IN">کٲشُر</option>
+            <option value="ne-IN">नेपाली</option>
+            <option value="sd-IN">سنڌي</option>
+            <option value="doi-IN">डोगरी</option>
+            <option value="mni-IN">ꯃꯤꯇꯩꯂꯣꯟ</option>
+            <option value="brx-IN">बर'</option>
+            <option value="sa-IN">संस्कृतम्</option>
+            <option value="kok-IN">कोंकणी</option>
           </select>
           <button id="dictateComplaintBtn" type="button" class="secondary">🎙 Speak complaint</button>
           <button type="button" class="secondary" onclick="readAloud($('details').value, $('complaintSpeechLanguage').value)">🔊 Read aloud</button>
           <small id="complaintVoiceStatus" aria-live="polite"></small>
           <small class="muted">Voice typing and read-aloud use the selected language; text is not translated. Your browser may process microphone audio for transcription, so review the text before submitting.</small>
+        </div>
+        <div class="voice-controls complaint-audio-controls">
+          <button id="recordComplaintAudioBtn" type="button" class="secondary">🎙 Record audio complaint</button>
+          <button id="stopComplaintAudioBtn" type="button" class="secondary" disabled>Stop recording</button>
+          <button id="removeComplaintAudioBtn" type="button" class="secondary" hidden>Remove recording</button>
+          <small id="complaintAudioStatus" aria-live="polite">Optional audio attachment, up to 5 MB. Your recording is stored with this complaint.</small>
+          <audio id="complaintAudioPreview" controls preload="none" hidden></audio>
         </div>
 
       </div>
@@ -456,6 +500,12 @@
 
     </div>
 
+    <p class="muted">
+      Photo, video, audio, and document delivery requires an active Firebase Storage
+      bucket. If Storage is not enabled, your complaint is still saved and sent
+      to the handler inbox, but attachments cannot be delivered.
+    </p>
+
     <p id="submissionProgress" class="submission-progress" role="status" aria-live="polite" hidden></p>
 
     <button
@@ -478,6 +528,14 @@
 <section id="submitted" class="page">
 
   <div class="success-card">
+
+    <div class="receipt-brand">
+      <div class="brand-mark" aria-hidden="true">🛡️</div>
+      <div>
+        <strong>ANTI CORRUPTION PORTAL</strong>
+        <small>Build a Better Tomorrow</small>
+      </div>
+    </div>
 
     <div class="success-icon">
       ✓
@@ -505,6 +563,12 @@
 
     <div id="submittedId"
          class="complaint-id">
+    </div>
+
+    <div class="receipt-details">
+      <p><b>Receipt sent to:</b> <span id="submittedConsumerEmail">Your verified sign-in email</span></p>
+      <p><b>Service handler contact:</b> <span id="submittedHandlerEmail">A handler contact will appear when your case is assigned.</span></p>
+      <p class="muted">Keep this Query ID for follow-up. Your receipt is also emailed when email delivery is configured.</p>
     </div>
 
     <p id="submittedEvidenceNotice"
@@ -536,6 +600,10 @@
 
       Track This Complaint
 
+    </button>
+
+    <button type="button" class="secondary" onclick="window.print()">
+      Print Receipt
     </button>
 
   </div>
@@ -571,6 +639,11 @@
           <option value="ml-IN">മലയാളം</option><option value="pa-IN">ਪੰਜਾਬੀ</option>
           <option value="or-IN">ଓଡ଼ିଆ</option><option value="as-IN">অসমীয়া</option>
           <option value="ur-IN">اردو</option>
+          <option value="mai-IN">मैथिली</option><option value="sat-IN">ᱥᱟᱱᱛᱟᱲᱤ</option>
+          <option value="ks-IN">کٲشُر</option><option value="ne-IN">नेपाली</option>
+          <option value="sd-IN">سنڌي</option><option value="doi-IN">डोगरी</option>
+          <option value="mni-IN">ꯃꯤꯇꯩꯂꯣꯟ</option><option value="brx-IN">बर'</option>
+          <option value="sa-IN">संस्कृतम्</option><option value="kok-IN">कोंकणी</option>
         </select>
       </label>
 
@@ -751,6 +824,15 @@
 
       </button>
 
+      <button
+        id="refreshComplaintsBtn"
+        class="secondary"
+        type="button"
+        onclick="refreshHandlerInbox()">
+
+        ↻ Refresh complaints
+
+      </button>
 
       <button
         class="secondary"
@@ -965,8 +1047,7 @@
 
 
     <label>
-
-      Officer Response
+      Officer Response (optional for status-only updates)
 
       <textarea
         id="solutionText"
@@ -986,6 +1067,11 @@
         <option value="ml-IN">മലയാളം</option><option value="pa-IN">ਪੰਜਾਬੀ</option>
         <option value="or-IN">ଓଡ଼ିଆ</option><option value="as-IN">অসমীয়া</option>
         <option value="ur-IN">اردو</option>
+        <option value="mai-IN">मैथिली</option><option value="sat-IN">ᱥᱟᱱᱛᱟᱲᱤ</option>
+        <option value="ks-IN">کٲشُر</option><option value="ne-IN">नेपाली</option>
+        <option value="sd-IN">سنڌي</option><option value="doi-IN">डोगरी</option>
+        <option value="mni-IN">ꯃꯤꯇꯩꯂꯣꯟ</option><option value="brx-IN">बर'</option>
+        <option value="sa-IN">संस्कृतम्</option><option value="kok-IN">कोंकणी</option>
       </select>
       <button id="dictateSolutionBtn" type="button" class="secondary">🎙 Dictate response</button>
       <button type="button" class="secondary" onclick="readAloud($('solutionText').value, $('solutionSpeechLanguage').value)">🔊 Read response</button>
@@ -1051,12 +1137,41 @@
       class="primary wide"
       onclick="sendSolution()">
 
-      Send Solution to Consumer
+      Send Solution or Status Update
 
     </button>
 
   </div>
 
+</section>
+
+<!-- ================= SOLUTION SENT ================= -->
+
+<section id="solution-sent" class="page">
+  <div class="success-card receipt-card">
+    <div class="receipt-brand">
+      <div class="brand-mark" aria-hidden="true">🛡️</div>
+      <div>
+        <strong>ANTI CORRUPTION PORTAL</strong>
+        <small>Build a Better Tomorrow</small>
+      </div>
+    </div>
+    <div class="success-icon">✓</div>
+    <p class="eyebrow">SERVICE HANDLER RECEIPT</p>
+    <h1 id="solutionSentTitle">Solution Sent</h1>
+    <p>The response and status have been saved to the complaint record.</p>
+    <div class="receipt-details solution-receipt">
+      <p><b>Query ID:</b> <span id="solutionSentId"></span></p>
+      <p><b>Updated status:</b> <span id="solutionSentStatus"></span></p>
+      <p><b>Consumer email:</b> <span id="solutionSentConsumerEmail"></span></p>
+      <p><b>Handler contact email:</b> <span id="solutionSentHandlerEmail"></span></p>
+      <p id="solutionSentResponseLabel"><b>Response:</b></p>
+      <blockquote id="solutionSentResponse"></blockquote>
+    </div>
+    <p class="muted">The consumer can see this update in their complaint tracker. An email is sent when SMTP email delivery is configured and deployed.</p>
+    <button type="button" class="primary" onclick="showPage('dashboard')">Back to Dashboard</button>
+    <button type="button" class="secondary" onclick="window.print()">Print Solution Receipt</button>
+  </div>
 </section>
 
 
@@ -1096,35 +1211,9 @@
 
 
   <div class="language-bar">
-
-    <b>
-      Language:
-    </b>
-
-    <button
-      class="secondary"
-      onclick="setLanguage('en')">
-
-      English
-
-    </button>
-
-    <button
-      class="secondary"
-      onclick="setLanguage('hi')">
-
-      हिन्दी
-
-    </button>
-
-    <button
-      class="secondary"
-      onclick="setLanguage('bn')">
-
-      বাংলা
-
-    </button>
-
+    <b>Interface language:</b>
+    <span>Choose a language in the top bar. Languages unavailable in Google Cloud Translation are shown but disabled.</span>
+    <small id="languageStatus" aria-live="polite"></small>
   </div>
 
 
@@ -1136,6 +1225,20 @@
   <div class="notice"
        id="actionNotice">
   </div>
+
+  <section class="panel legal-reference">
+    <p class="eyebrow">INDIAN ANTI-CORRUPTION & PUBLIC RIGHTS REFERENCES</p>
+    <h2>Know the law. Use official channels.</h2>
+    <p>These are starting points for learning, not legal advice or an exhaustive list. Laws, commencement status, procedures and competent authorities can change; check the current official text and seek qualified advice for your situation.</p>
+    <ul>
+      <li><b>Prevention of Corruption Act, 1988</b> (as amended): provisions addressing corruption offences and related procedures.</li>
+      <li><b>Lokpal and Lokayuktas Act, 2013:</b> framework concerning the Lokpal and state Lokayuktas.</li>
+      <li><b>Right to Information Act, 2005:</b> a statutory route to request information from public authorities, subject to the Act's rules and exemptions.</li>
+      <li><b>Whistle Blowers Protection Act, 2014:</b> protection framework for disclosures; check its current commencement and applicable procedures before relying on it.</li>
+      <li><b>Constitution of India, Articles 14, 32 and 226:</b> equality before law and constitutional remedies through the Supreme Court and High Courts, subject to legal requirements.</li>
+    </ul>
+    <p>Official sources: <a href="https://www.indiacode.nic.in/" target="_blank" rel="noopener">India Code</a>, <a href="https://legislative.gov.in/constitution-of-india/" target="_blank" rel="noopener">Legislative Department</a>, and <a href="https://cvc.gov.in/" target="_blank" rel="noopener">Central Vigilance Commission</a>.</p>
+  </section>
 
 </section>
 

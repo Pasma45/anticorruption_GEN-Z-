@@ -14,6 +14,7 @@ import {
   getDoc,
   getFirestore,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   orderBy,
   query,
@@ -29,6 +30,10 @@ import {
   ref,
   uploadBytes
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js";
+import {
+  getFunctions,
+  httpsCallable
+} from "https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCwcxGfPTg3x4KbMg-HiqgvMQg8_7kBT_Y",
@@ -89,6 +94,7 @@ if (!isFirebaseConfigured()) {
   auth = getAuth(app);
   const db = getFirestore(app);
   const storage = getStorage(app);
+  const functions = getFunctions(app, "us-central1");
 
   async function handlerRecord() {
     const user = auth.currentUser;
@@ -140,21 +146,37 @@ if (!isFirebaseConfigured()) {
     };
   }
 
-  async function createComplaint(complaint, imageFile, docFile, videoFile, onProgress) {
+  async function createComplaint(
+    complaint,
+    imageFile,
+    docFile,
+    videoFile,
+    audioFile,
+    onProgress
+  ) {
     const user = requireConsumerUser();
     const now = new Date().toLocaleString();
     const complaintRef = doc(db, "complaints", complaint.id);
 
-    if (onProgress) onProgress("Saving your complaint...");
+    if (onProgress) {
+      onProgress({
+        status: "saving",
+        message: "Saving your complaint..."
+      });
+    }
     await setDoc(complaintRef, {
       ...complaint,
       ownerUid: user.uid,
+      consumerEmail: user.email,
       status: "Pending",
       response: "",
       responseAudioUrl: "",
       responseAudioPath: "",
+      handlerEmail: "",
       imageUrl: "",
       imagePath: "",
+      complaintAudioUrl: "",
+      complaintAudioPath: "",
       documentUrl: "",
       documentPath: "",
       documentName: "",
@@ -166,52 +188,110 @@ if (!isFirebaseConfigured()) {
       createdAt: serverTimestamp()
     });
 
-    if (onProgress && (imageFile || docFile || videoFile)) {
-      onProgress("Complaint saved. Uploading your selected evidence...");
-    }
-    const uploads = await Promise.allSettled([
-      uploadEvidence(user, complaint.id, imageFile, "image"),
-      uploadEvidence(user, complaint.id, docFile, "document"),
-      uploadEvidence(user, complaint.id, videoFile, "video")
-    ]);
-    const image = uploads[0].status === "fulfilled" ? uploads[0].value : null;
-    const document = uploads[1].status === "fulfilled" ? uploads[1].value : null;
-    const video = uploads[2].status === "fulfilled" ? uploads[2].value : null;
-    const evidenceErrors = uploads.filter(result => result.status === "rejected");
+    const evidenceFiles = [
+      { file: imageFile, kind: "image" },
+      { file: audioFile, kind: "audio" },
+      { file: docFile, kind: "document" },
+      { file: videoFile, kind: "video" }
+    ].filter(item => item.file);
 
-    for (const result of evidenceErrors) {
-      console.error("Complaint submitted, but evidence could not be uploaded.", result.reason);
-    }
-
-    if (image || document || video) {
-      try {
-        await updateDoc(complaintRef, {
-          imageUrl: image ? image.url : "",
-          imagePath: image ? image.path : "",
-          documentUrl: document ? document.url : "",
-          documentPath: document ? document.path : "",
-          documentName: document ? docFile.name : "",
-          videoUrl: video ? video.url : "",
-          videoPath: video ? video.path : "",
-          videoName: video ? videoFile.name : ""
+    if (evidenceFiles.length) {
+      if (onProgress) {
+        onProgress({
+          status: "uploading",
+          message: "Complaint saved. Uploading evidence in the background."
         });
-      } catch (error) {
-        await Promise.all(
-          [image, document, video]
-            .filter(Boolean)
-            .map(file =>
-              deleteObject(ref(storage, file.path)).catch(cleanupError => {
-                console.error("Could not clean up uploaded evidence.", cleanupError);
-              })
-            )
-        );
-        console.error("Complaint submitted, but evidence references could not be saved.", error);
-        evidenceErrors.push({ status: "rejected", reason: error });
       }
+
+      void (async () => {
+        const results = await Promise.allSettled(
+          evidenceFiles.map(item =>
+            uploadEvidence(user, complaint.id, item.file, item.kind)
+          )
+        );
+        const uploaded = [];
+        let errors = 0;
+        const evidenceUpdate = {};
+
+        for (let index = 0; index < results.length; index += 1) {
+          const result = results[index];
+          const item = evidenceFiles[index];
+          if (result.status === "rejected") {
+            errors += 1;
+            const code = result.reason && result.reason.code
+              ? ` (${result.reason.code})`
+              : "";
+            console.error(
+              `Could not upload complaint ${item.kind} evidence${code}.`,
+              result.reason
+            );
+            continue;
+          }
+          if (!result.value) continue;
+
+          uploaded.push(result.value);
+          if (item.kind === "image") {
+            evidenceUpdate.imageUrl = result.value.url;
+            evidenceUpdate.imagePath = result.value.path;
+          } else if (item.kind === "audio") {
+            evidenceUpdate.complaintAudioUrl = result.value.url;
+            evidenceUpdate.complaintAudioPath = result.value.path;
+          } else if (item.kind === "document") {
+            evidenceUpdate.documentUrl = result.value.url;
+            evidenceUpdate.documentPath = result.value.path;
+            evidenceUpdate.documentName = item.file.name;
+          } else {
+            evidenceUpdate.videoUrl = result.value.url;
+            evidenceUpdate.videoPath = result.value.path;
+            evidenceUpdate.videoName = item.file.name;
+          }
+        }
+
+        if (Object.keys(evidenceUpdate).length) {
+          try {
+            await updateDoc(complaintRef, evidenceUpdate);
+          } catch (error) {
+            await Promise.all(uploaded.map(file =>
+              deleteObject(ref(storage, file.path)).catch(cleanupError => {
+                console.error("Could not clean up complaint evidence.", cleanupError);
+              })
+            ));
+            console.error("Could not attach uploaded evidence to the complaint.", error);
+            errors = evidenceFiles.length;
+          }
+        }
+
+        if (onProgress) {
+          onProgress({
+            status: errors ? "partial" : "complete",
+            errors,
+            total: evidenceFiles.length,
+            message: errors
+              ? `Complaint saved, but ${errors} evidence file(s) could not be attached. Check Cloud Storage setup, security rules, connection, and the 5 MB per-file limit.`
+              : "Complaint and evidence submitted successfully."
+          });
+        }
+      })().catch(error => {
+        console.error("Complaint was saved, but evidence processing failed.", error);
+        if (onProgress) {
+          onProgress({
+            status: "partial",
+            errors: evidenceFiles.length,
+            total: evidenceFiles.length,
+            message: "Complaint saved, but evidence could not be uploaded. Check Cloud Storage setup, security rules, connection, and the 5 MB per-file limit."
+          });
+        }
+      });
+    } else if (onProgress) {
+      onProgress({
+        status: "complete",
+        errors: 0,
+        total: 0,
+        message: "Complaint submitted successfully."
+      });
     }
 
-    if (onProgress) onProgress("Complaint submitted.");
-    return { evidenceErrors: evidenceErrors.length };
+    return { evidencePending: evidenceFiles.length };
   }
 
   function listen(onNext, onError) {
@@ -224,6 +304,18 @@ if (!isFirebaseConfigured()) {
       snapshot => onNext(snapshot.docs.map(item => item.data())),
       onError
     );
+  }
+
+  async function refreshComplaints() {
+    if (!(await handlerRecord())) {
+      throw new Error("Only an authorised service handler can refresh the inbox.");
+    }
+    const complaintsQuery = query(
+      collection(db, "complaints"),
+      orderBy("createdAt", "desc")
+    );
+    const snapshot = await getDocsFromServer(complaintsQuery);
+    return snapshot.docs.map(item => item.data());
   }
 
   async function getComplaint(id) {
@@ -252,10 +344,12 @@ if (!isFirebaseConfigured()) {
     const snapshot = await getDoc(complaintRef);
     if (!snapshot.exists()) throw new Error("Complaint not found.");
     const complaint = snapshot.data();
+    const handlerEmail = auth.currentUser.email || "";
     const previousAudioPath = complaint.responseAudioPath || "";
     await updateDoc(complaintRef, {
       status,
       response,
+      handlerEmail,
       responseAudioUrl: "",
       responseAudioPath: "",
       updated: new Date().toLocaleString()
@@ -294,9 +388,16 @@ if (!isFirebaseConfigured()) {
     }
   }
 
+  async function translateInterface(target, texts) {
+    const translate = httpsCallable(functions, "translateInterface");
+    const result = await translate({ target, texts });
+    return result.data.translations;
+  }
+
   window.fb = {
     createComplaint,
     listen,
+    refreshComplaints,
     getComplaint,
     listByOwner,
     respond,
@@ -305,6 +406,7 @@ if (!isFirebaseConfigured()) {
     currentUser: () => auth.currentUser,
     signInHandler,
     signInConsumer,
+    translateInterface,
     logout: () => signOut(auth)
   };
 

@@ -23,10 +23,11 @@ service cloud.firestore {
       let imagePath = request.resource.data.imagePath;
       let documentPath = request.resource.data.documentPath;
       let videoPath = request.resource.data.videoPath;
+      let complaintAudioPath = request.resource.data.get('complaintAudioPath', '');
       return consumer()
         && resource.data.ownerUid == request.auth.uid
-        && changed.hasAny(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName', 'videoUrl', 'videoPath', 'videoName'])
-        && changed.hasOnly(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName', 'videoUrl', 'videoPath', 'videoName'])
+        && changed.hasAny(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName', 'videoUrl', 'videoPath', 'videoName', 'complaintAudioUrl', 'complaintAudioPath'])
+        && changed.hasOnly(['imageUrl', 'imagePath', 'documentUrl', 'documentPath', 'documentName', 'videoUrl', 'videoPath', 'videoName', 'complaintAudioUrl', 'complaintAudioPath'])
         && request.resource.data.status == resource.data.status
         && request.resource.data.response == resource.data.response
         && request.resource.data.responseAudioUrl == resource.data.responseAudioUrl
@@ -75,7 +76,24 @@ service cloud.firestore {
         )
         && (resource.data.imagePath == '' || imagePath == resource.data.imagePath)
         && (resource.data.documentPath == '' || documentPath == resource.data.documentPath)
-        && (resource.data.videoPath == '' || videoPath == resource.data.videoPath);
+        && (resource.data.videoPath == '' || videoPath == resource.data.videoPath)
+        && complaintAudioPath is string
+        && (
+          (
+            complaintAudioPath == ''
+            && request.resource.data.get('complaintAudioUrl', '') == ''
+          )
+          || (
+            complaintAudioPath.matches('^complaints/[^/]+/[^/]+/audio$')
+            && complaintAudioPath.split('/')[1] == request.auth.uid
+            && complaintAudioPath.split('/')[2] == complaintId
+            && request.resource.data.get('complaintAudioUrl', '').matches('^https://firebasestorage.googleapis.com/.*$')
+          )
+        )
+        && (
+          resource.data.get('complaintAudioPath', '') == ''
+          || complaintAudioPath == resource.data.complaintAudioPath
+        );
     }
 
     match /handlers/{mobile} {
@@ -112,28 +130,33 @@ service cloud.firestore {
     match /complaints/{complaintId} {
       allow create: if consumer()
         && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.consumerEmail == request.auth.token.email
         && request.resource.data.id == complaintId
         && request.resource.data.status == 'Pending'
         && request.resource.data.response == ''
         && request.resource.data.keys().hasOnly([
           'id', 'name', 'location', 'issue', 'details',
-          'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
+          'ownerUid', 'consumerEmail', 'status', 'response', 'imageUrl', 'imagePath',
           'documentUrl', 'documentPath', 'documentName', 'created',
           'updated', 'createdAt', 'videoUrl', 'videoPath', 'videoName',
           'locationState', 'locationVillage', 'responseAudioUrl',
-          'responseAudioPath'
+          'responseAudioPath', 'handlerEmail', 'complaintAudioUrl',
+          'complaintAudioPath'
         ])
         && request.resource.data.keys().hasAll([
           'id', 'name', 'location', 'issue', 'details',
-          'ownerUid', 'status', 'response', 'imageUrl', 'imagePath',
+          'ownerUid', 'consumerEmail', 'status', 'response', 'imageUrl', 'imagePath',
           'documentUrl', 'documentPath', 'documentName', 'created',
           'updated', 'createdAt', 'videoUrl', 'videoPath', 'videoName',
           'locationState', 'locationVillage', 'responseAudioUrl',
-          'responseAudioPath'
+          'responseAudioPath', 'handlerEmail', 'complaintAudioUrl',
+          'complaintAudioPath'
         ])
         && request.resource.data.createdAt == request.time
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 200
+        && request.resource.data.consumerEmail is string
+        && request.resource.data.consumerEmail.size() <= 320
         && request.resource.data.location is string
         && request.resource.data.location.size() <= 300
         && request.resource.data.issue is string
@@ -153,6 +176,10 @@ service cloud.firestore {
         && request.resource.data.videoName is string
         && request.resource.data.responseAudioUrl is string
         && request.resource.data.responseAudioPath is string
+        && request.resource.data.complaintAudioUrl is string
+        && request.resource.data.complaintAudioPath is string
+        && request.resource.data.handlerEmail is string
+        && request.resource.data.handlerEmail.size() <= 320
         && request.resource.data.locationState is string
         && request.resource.data.locationState.size() <= 100
         && request.resource.data.locationVillage is string
@@ -168,7 +195,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly([
               'status', 'response', 'updated',
-              'responseAudioUrl', 'responseAudioPath'
+                'responseAudioUrl', 'responseAudioPath', 'handlerEmail'
             ])
           && request.resource.data.status in [
             'Pending', 'Under Review', 'Investigation Started',
@@ -177,6 +204,8 @@ service cloud.firestore {
           ]
           && request.resource.data.response is string
           && request.resource.data.response.size() <= 1000
+          && request.resource.data.handlerEmail is string
+          && request.resource.data.handlerEmail.size() <= 320
           && (
             (
               request.resource.data.responseAudioPath == ''
@@ -208,5 +237,14 @@ service cloud.firestore {
     match /emailNotifications/{notificationId} {
       allow read, write: if false;
     }
+
+    match /uiTranslationCache/{cacheId} {
+      allow read, write: if false;
+    }
+
+    match /uiTranslationRateLimits/{requestId} {
+      allow read, write: if false;
+    }
+
   }
 }
